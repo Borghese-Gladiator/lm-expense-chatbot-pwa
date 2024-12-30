@@ -7,6 +7,7 @@ interface GraphProps {
 }
 
 const Graph: React.FC<GraphProps> = ({ data }) => {
+  console.log(data)
   return (
     <div className={styles.graphContainer}>
       <ResponsiveContainer width="100%" height={400}>

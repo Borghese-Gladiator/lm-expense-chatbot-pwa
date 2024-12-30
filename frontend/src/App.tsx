@@ -4,32 +4,27 @@ import ChatInput from './components/ChatInput';
 import Graph from './components/Graph';
 import styles from './App.module.css';
 import HeroBanner from './components/HeroBanner';
+import { TMessage } from './types';
 
 const defaultMessage = 'Type "graph" to generate a graph.';
-interface Message {
-  text: string;
-  sender: 'user' | 'bot';
-}
 
 const App: React.FC = () => {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [graphData, setGraphData] = useState<any>(null); 
+  const [messages, setMessages] = useState<TMessage[]>([]);
 
   const handleNewMessage = (message: string) => {
-    const newMessage: Message = { text: message, sender: 'user' };
+    const newMessage: TMessage = { text: message, sender: 'user' };
     setMessages([...messages, newMessage]);
 
     if (message.toLowerCase().includes('graph')) {
       const graphResponse = generateGraphData(message);
-      setGraphData(graphResponse);
       setMessages((prevMessages) => [
         ...prevMessages,
-        { text: 'Here is your graph:', sender: 'bot' },
+        { text: 'Here is your graph', sender: 'bot', graphData: graphResponse },
       ]);
     } else {
       setMessages((prevMessages) => [
         ...prevMessages,
-        { text: 'I don’t understand. Type "graph" to generate a graph.', sender: 'bot' },
+        { text: 'I don’t understand. Type "graph" to generate a graph.', sender: 'bot', graphData: null },
       ]);
     }
   };
@@ -51,7 +46,6 @@ const App: React.FC = () => {
     <>
       <HeroBanner chatRef={chatRef} onSendDefaultMessage={() => handleNewMessage(defaultMessage)} />
       <Chat chatRef={chatRef} messages={messages} />
-      {graphData && <Graph data={graphData} />}
       <ChatInput onSendMessage={handleNewMessage} />
     </>
   );

@@ -1,22 +1,18 @@
 import React from 'react';
 import Message from './Message';
 import styles from './Chat.module.css';
-
-interface MessageProps {
-  text: string;
-  sender: 'user' | 'bot';
-}
+import { TMessage } from '../types';
 
 interface ChatProps {
-  messages: MessageProps[];
+  messages: TMessage[];
   chatRef: React.RefObject<HTMLDivElement>;
 }
 
 const Chat: React.FC<ChatProps> = ({ messages, chatRef }) => {
   return (
     <div className={styles.chatContainer} ref={chatRef}>
-      {messages.map((msg, index) => (
-        <Message key={index} text={msg.text} sender={msg.sender} />
+      {messages.map((message, index) => (
+        <Message key={index} {...message} />
       ))}
     </div>
   );

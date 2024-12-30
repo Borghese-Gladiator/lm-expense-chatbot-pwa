@@ -1,17 +1,34 @@
-.message {
-  padding: 10px;
-  border-radius: 5px;
-  margin-bottom: 10px;
-  max-width: 70%;
-  word-wrap: break-word;
-}
-
-.user {
-  background-color: #e0f7fa;
-  align-self: flex-end;
+.messageContainer {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 16px;
+  
+  background-color: #f0f0f0;
+  border-radius: 8px;
 }
 
 .bot {
-  background-color: #c8e6c9;
+  align-items: flex-start;
+}
+
+.user {
+  align-self: flex-end;
+  width: 60%
+}
+
+.text {
+  padding: 10px;
+  max-width: 60%;
+}
+
+.graph {
+  margin-top: 10px;
+}
+
+.alignLeft {
   align-self: flex-start;
+}
+
+.alignRight {
+  align-self: flex-end;
 }
