@@ -1,36 +1,57 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# app (MVP)
+This directory contains an Expense Summarizer chatbot app that analyzes spending history from Lunch Money on-device
 
-## Getting Started
+Web
+<screenshot>
 
-First, run the development server:
+Mobile
+<screenshot>
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Technologies
+- [Next.js](https://nextjs.org) App Router
+- [AI SDK](https://ai-sdk.dev/docs/introduction)
+  - Unified API for generating text, structured objects, and tool calls with LLMs
+- [shadcn/ui](https://ui.shadcn.com)
+  - Styling with [Tailwind CSS](https://tailwindcss.com)
+  - Component primitives from [Radix UI](https://radix-ui.com) for accessibility and flexibility
+- [WebLLM](https://webllm.mlc.ai/)
+  - In-Browser model inference engine that uses WebGPU for hardware acceleration
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Notes
+Methodology
+- [X] `npx create-next-app app`
+- [X] set up PWA following [docs](https://serwist.pages.dev/)
+  - `yarn add @serwist/next`
+  - `yarn add -D @serwist/build`
+- [X] generated favicons with [favicon generator](https://realfavicongenerator.net/)
+  - generated first logo with ChatGPT
+- [X] deployed to Vercel - validated PWA actually deploys!
+  - ``
+- [ ] implemented chat via ShadCN libraries for AI Tools
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+- implemented chat frontend by importing ShadCN blocks
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-## Learn More
+PWA Info
+- `next-pwa` - now deprecated
+- `@ducanh2912/next-pwa` - now deprecated too  [reference](https://ducanh-next-pwa.vercel.app/docs/next-pwa/getting-started)
+- `@serwist/next` - [reference](https://serwist.pages.dev/docs/next)
 
-To learn more about Next.js, take a look at the following resources:
+ShadCN libraries for AI Tools
+- frontend controller
+  - [Vercel - general AI SDK](https://ai-sdk.dev/docs/introduction)
+  - [Vercel - Chat SDK](https://vercel.com/blog/introducing-chat-sdk) -> handle interaction with model providers
+- frontend presentation
+  - [ShadCN blocks](https://www.shadcn.io/blocks/ai-chatbot) => FAILED, package not available
+  - [Shadcn UI Kit](https://shadcnuikit.com/pricing) => COSTS MONEY
+  - [llamaindex/chat-ui](https://ui.llamaindex.ai/)
+    - handles presentation
+    - requires usage of AI SDK for handling chat logic
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Troubleshooting
+- shadcn components
+  - `npx shadcn@latest add https://www.shadcn.io/registry/ai-chatbot.json`
+  - loading from this URL didn't work - https://www.shadcn.io/blocks/ai-chatbot
+    ```
+    {"error":"Failed to get package","details":{"errno":-2,"code":"ENOENT","syscall":"open","path":"/app/packages/ai-chatbot/package.json"}}
+    ```
