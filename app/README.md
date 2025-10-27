@@ -8,8 +8,8 @@ Mobile
 <screenshot>
 
 Technologies
-- [Next.js](https://nextjs.org) App Router
-- [AI SDK](https://ai-sdk.dev/docs/introduction)
+- [Vercel Next.js](https://nextjs.org) App Router
+- [Vercel AI SDK](https://ai-sdk.dev/docs/introduction)
   - Unified API for generating text, structured objects, and tool calls with LLMs
 - [shadcn/ui](https://ui.shadcn.com)
   - Styling with [Tailwind CSS](https://tailwindcss.com)
@@ -26,7 +26,12 @@ Methodology
 - [X] generated favicons with [favicon generator](https://realfavicongenerator.net/)
   - generated first logo with ChatGPT
 - [X] deployed to Vercel - validated PWA actually deploys!
-  - ``
+  - `https://lm-expense-chatbot-pwa.vercel.app/`
+- [ ] implemented chat backend with Vercel AI SDK + WebLLM
+  - Vercel AI SDK -> attempted, but reverted (see below)
+    - `yarn add ai @ai-sdk/react @ai-sdk/custom zod`
+  - WebLLM
+    - `yarn add @mlc-ai/web-llm`
 - [ ] implemented chat via ShadCN libraries for AI Tools
 
 - implemented chat frontend by importing ShadCN blocks
@@ -47,6 +52,12 @@ ShadCN libraries for AI Tools
   - [llamaindex/chat-ui](https://ui.llamaindex.ai/)
     - handles presentation
     - requires usage of AI SDK for handling chat logic
+
+Vercel AI SDK
+- I would recommend against using this library with WebLLM to create an LLM that runs on-device.
+  - this library is NOT built for custom language models like with WebLLM. It technically has a Language V2 specification, but you have to implement a pretty extensive [Custom Provider](https://ai-sdk.dev/providers/community-providers/custom-providers)
+- For existing providers, it is supposed to work really well (according to the docs) like OpenAI, Anthropic, etc.
+  - Note that docs may be incorrect, like referencing `@ai-sdk/custom` which does not exist. This package is not installable!
 
 ### Troubleshooting
 - shadcn components
