@@ -1,13 +1,9 @@
+// app/page.jsx
 "use client";
 
 import { useState } from "react";
-import { streamText } from "ai";
-import { WebLLMProvider } from "@/lib/webllm";
 import ChatBox from "@/components/ChatBox";
-
-import { AI } from "ai";
-
-const ai = new AI({ providers: [WebLLMProvider] });
+import { WebLLMLanguageModel } from "@/lib/webllm";
 
 export default function HomePage() {
   const [messages, setMessages] = useState([]);
@@ -16,90 +12,62 @@ export default function HomePage() {
     // Add user message
     setMessages((prev) => [...prev, { text: prompt, from: "user" }]);
 
-    let streamedText = "";
-
     // Add placeholder for AI message
     setMessages((prev) => [...prev, { text: "", from: "ai" }]);
 
-    const ai = new AI({ providers: [WebLLMProvider] });
-    const result = streamText({
-      model: "webllm",
-      prompt,
-      onStream: (chunk) => console.log("delta:", chunk),
-    });
-
-    for await (const part of result.fullStream) {
-      if (part.type === "delta") {
-        streamedText += part.delta;
-
-        // Update last AI message in real-time
-        setMessages((prev) => {
-          const newMessages = [...prev];
-          newMessages[newMessages.length - 1].text = streamedText;
-          return newMessages;
-        });
-      }
-
-      // Optional: handle raw provider-specific chunks
-      if (part.type === "raw") {
-        console.log("Raw chunk:", part.rawValue);
-      }
-    }
-
-    // Ensure final text is correct
-    setMessages((prev) => {
-      const newMessages = [...prev];
-      newMessages[newMessages.length - 1].text = streamedText;
-      return newMessages;
-    });
-  };
-
-  return <ChatBox messages={messages} onSend={handleSend} />;
-}
-
-/*
-"use client";
-
-import { useState } from "react";
-import { generateText } from "ai";
-import { webllmAdapter } from "@/lib/webllm";
-import ChatBox from "@/components/ChatBox";
-
-export default function HomePage() {
-  const [messages, setMessages] = useState([]);
-
-  const handleSend = async (prompt) => {
-    setMessages((prev) => [...prev, { text: prompt, from: "user" }]);
     let streamedText = "";
+    console.info("[page] Sending prompt to WebLLM:", prompt);
 
-    const { text } = await generateText({
-      model: webllmAdapter,
-      prompt,
-      onStream(token) {
-        streamedText += token;
-        // update last AI message in real-time
-        setMessages((prev) => {
-          const newMessages = [...prev];
-          if (newMessages[newMessages.length - 1]?.from === "ai") {
-            newMessages[newMessages.length - 1].text = streamedText;
-          } else {
-            newMessages.push({ text: streamedText, from: "ai" });
-          }
-          return newMessages;
-        });
-      },
-    });
+    const messageHistory = [{ role: "user", content: prompt }];
 
-    // ensure final text
-    setMessages((prev) => {
-      const newMessages = [...prev];
-      if (newMessages[newMessages.length - 1].from === "ai") {
-        newMessages[newMessages.length - 1].text = text;
+    try {
+      // We pass onStream so the adapter will invoke it per delta,
+      // and we also iterate the async generator for completeness and logs.
+      const gen = WebLLMLanguageModel.generate(messageHistory, {
+        onStream: (delta) => {
+          // Update last AI message as new deltas arrive
+          streamedText += delta;
+          setMessages((prev) => {
+            const newMessages = [...prev];
+            // Ensure last message exists and is AI
+            if (!newMessages.length || newMessages[newMessages.length - 1].from !== "ai") {
+              newMessages.push({ text: streamedText, from: "ai" });
+            } else {
+              newMessages[newMessages.length - 1].text = streamedText;
+            }
+            return newMessages;
+          });
+        },
+      });
+
+      // Iterate the generator too — this gives us per-yield visibility and final return
+      for await (const part of gen) {
+        // part.text will be the delta that we already handled in onStream;
+        // but we can log or use it for additional client-side processing.
+        console.debug("[page] generator yielded:", part?.text?.slice?.(0, 120));
       }
-      return newMessages;
-    });
+
+      // After the generator finishes, ensure final text is set (defensive)
+      setMessages((prev) => {
+        const newMessages = [...prev];
+        if (!newMessages.length || newMessages[newMessages.length - 1].from !== "ai") {
+          newMessages.push({ text: streamedText, from: "ai" });
+        } else {
+          newMessages[newMessages.length - 1].text = streamedText;
+        }
+        return newMessages;
+      });
+
+      console.info("[page] Finished streaming. final length:", streamedText.length);
+    } catch (err) {
+      console.error("[page] Error generating AI response:", err);
+      setMessages((prev) => {
+        const newMessages = [...prev];
+        newMessages[newMessages.length - 1].text = "[Error generating response]";
+        return newMessages;
+      });
+    }
   };
 
   return <ChatBox messages={messages} onSend={handleSend} />;
 }
-*/
