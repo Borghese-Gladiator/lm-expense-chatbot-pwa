@@ -30,91 +30,47 @@ import { Button } from '@/components/ui/button';
 import { MicIcon, PaperclipIcon, RotateCcwIcon } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { useCallback, useState } from 'react';
+import { useWebLLM } from '@/hooks/useWebLLM';
+
+const SYSTEM_PROMPT = `You are a helpful AI assistant specialized in analyzing expense data from Lunch Money.
+You help users understand their spending patterns, identify areas where they can save money, and provide financial insights.
+Be concise, friendly, and actionable in your responses.`;
 
 const models = [
-  { id: 'gpt-4o', name: 'GPT-4o' },
-  { id: 'claude-3-5-sonnet', name: 'Claude 3.5 Sonnet' },
-  { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' },
-  { id: 'llama-3.1-70b', name: 'Llama 3.1 70B' },
-];
-
-const sampleResponses = [
-  {
-    content: "I'd be delighted to help you with that! React is a brilliant JavaScript library for building user interfaces. What specific aspect would you like to explore?",
-    reasoning: "The user is asking about React, which is quite a broad topic. I should provide a helpful overview whilst asking for more specific information to give a more targeted response.",
-    sources: [
-      { title: "React Official Documentation", url: "https://react.dev" },
-      { title: "React Developer Tools", url: "https://react.dev/learn" }
-    ]
-  },
-  {
-    content: "Next.js is an absolutely marvellous framework built on top of React that provides server-side rendering, static site generation, and many other powerful features straight out of the box.",
-    reasoning: "The user mentioned Next.js, so I should explain its relationship to React and highlight its key benefits for modern web development.",
-    sources: [
-      { title: "Next.js Documentation", url: "https://nextjs.org/docs" },
-      { title: "Vercel Next.js Guide", url: "https://vercel.com/guides/nextjs" }
-    ]
-  },
-  {
-    content: "TypeScript adds static type checking to JavaScript, which helps catch errors early and improves code quality tremendously. It's particularly valuable in larger applications, I must say.",
-    reasoning: "TypeScript is becoming increasingly important in modern development. I should explain its benefits whilst keeping the explanation accessible.",
-    sources: [
-      { title: "TypeScript Handbook", url: "https://www.typescriptlang.org/docs" },
-      { title: "TypeScript with React", url: "https://react.dev/learn/typescript" }
-    ]
-  }
+  { id: 'webllm', name: 'WebLLM (On-Device)' },
 ];
 
 export default function Home() {
+  // Initialize WebLLM
+  const {
+    isLoading: isModelLoading,
+    isModelLoaded,
+    loadProgress,
+    loadStatus,
+    error: modelError,
+    chat,
+    resetChat,
+    modelName
+  } = useWebLLM();
+
   const [messages, setMessages] = useState([
     {
       id: nanoid(),
-      content: "Hello! I'm your AI assistant. I can help you with coding questions, explain concepts, and provide guidance on web development topics. What would you like to know?",
+      content: "Hello! I'm your Lunch Money Expense Analyzer. I can help you understand your spending patterns, identify savings opportunities, and answer questions about your finances. What would you like to know?",
       role: 'assistant',
       timestamp: new Date(),
-      sources: [
-        { title: "Getting Started Guide", url: "#" },
-        { title: "API Documentation", url: "#" }
-      ]
     }
   ]);
-  
+
   const [inputValue, setInputValue] = useState('');
   const [selectedModel, setSelectedModel] = useState(models[0].id);
   const [isTyping, setIsTyping] = useState(false);
   const [streamingMessageId, setStreamingMessageId] = useState(null);
-  
-  const simulateTyping = useCallback((messageId, content, reasoning, sources) => {
-    let currentIndex = 0;
-    const typeInterval = setInterval(() => {
-      setMessages(prev => prev.map(msg => {
-        if (msg.id === messageId) {
-          const currentContent = content.slice(0, currentIndex);
-          return {
-            ...msg,
-            content: currentContent,
-            isStreaming: currentIndex < content.length,
-            reasoning: currentIndex >= content.length ? reasoning : undefined,
-            sources: currentIndex >= content.length ? sources : undefined,
-          };
-        }
-        return msg;
-      }));
-      currentIndex += Math.random() > 0.1 ? 1 : 0; // Simulate variable typing speed
-      
-      if (currentIndex >= content.length) {
-        clearInterval(typeInterval);
-        setIsTyping(false);
-        setStreamingMessageId(null);
-      }
-    }, 50);
-    return () => clearInterval(typeInterval);
-  }, []);
 
-  const handleSubmit = useCallback((event) => {
+  const handleSubmit = useCallback(async (event) => {
     event.preventDefault();
-    
-    if (!inputValue.trim() || isTyping) return;
+
+    if (!inputValue.trim() || isTyping || !isModelLoaded) return;
 
     // Add user message
     const userMessage = {
@@ -125,14 +81,13 @@ export default function Home() {
     };
 
     setMessages(prev => [...prev, userMessage]);
+    const userInput = inputValue.trim();
     setInputValue('');
     setIsTyping(true);
 
-    // Simulate AI response with delay
-    setTimeout(() => {
-      const responseData = sampleResponses[Math.floor(Math.random() * sampleResponses.length)];
+    try {
+      // Create assistant message placeholder
       const assistantMessageId = nanoid();
-      
       const assistantMessage = {
         id: assistantMessageId,
         content: '',
@@ -143,29 +98,80 @@ export default function Home() {
 
       setMessages(prev => [...prev, assistantMessage]);
       setStreamingMessageId(assistantMessageId);
-      
-      // Start typing simulation
-      simulateTyping(assistantMessageId, responseData.content, responseData.reasoning, responseData.sources);
-    }, 800);
-  }, [inputValue, isTyping, simulateTyping]);
 
-  const handleReset = useCallback(() => {
+      // Prepare conversation history for WebLLM
+      const conversationHistory = messages
+        .filter(m => m.role !== 'system')
+        .map(m => ({ role: m.role, content: m.content }));
+
+      // Add system prompt
+      const messagesToSend = [
+        { role: 'system', content: SYSTEM_PROMPT },
+        ...conversationHistory,
+        { role: 'user', content: userInput }
+      ];
+
+      // Use WebLLM to generate response with streaming
+      await chat(messagesToSend, (chunk, fullResponse) => {
+        setMessages(prev => prev.map(msg => {
+          if (msg.id === assistantMessageId) {
+            return {
+              ...msg,
+              content: fullResponse,
+              isStreaming: true,
+            };
+          }
+          return msg;
+        }));
+      });
+
+      // Mark streaming as complete
+      setMessages(prev => prev.map(msg => {
+        if (msg.id === assistantMessageId) {
+          return {
+            ...msg,
+            isStreaming: false,
+          };
+        }
+        return msg;
+      }));
+
+      setIsTyping(false);
+      setStreamingMessageId(null);
+    } catch (error) {
+      console.error('Error generating response:', error);
+
+      // Add error message
+      const errorMessageId = nanoid();
+      setMessages(prev => [...prev, {
+        id: errorMessageId,
+        content: `Sorry, I encountered an error: ${error.message}. Please try again.`,
+        role: 'assistant',
+        timestamp: new Date(),
+        isError: true,
+      }]);
+
+      setIsTyping(false);
+      setStreamingMessageId(null);
+    }
+  }, [inputValue, isTyping, isModelLoaded, chat, messages]);
+
+  const handleReset = useCallback(async () => {
     setMessages([
       {
         id: nanoid(),
-        content: "Hello! I'm your AI assistant. I can help you with coding questions, explain concepts, and provide guidance on web development topics. What would you like to know?",
+        content: "Hello! I'm your Lunch Money Expense Analyzer. I can help you understand your spending patterns, identify savings opportunities, and answer questions about your finances. What would you like to know?",
         role: 'assistant',
         timestamp: new Date(),
-        sources: [
-          { title: "Getting Started Guide", url: "#" },
-          { title: "API Documentation", url: "#" }
-        ]
       }
     ]);
     setInputValue('');
     setIsTyping(false);
     setStreamingMessageId(null);
-  }, []);
+
+    // Reset WebLLM chat context
+    await resetChat();
+  }, [resetChat]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4 dark:from-slate-950 dark:to-slate-900">
@@ -174,24 +180,57 @@ export default function Home() {
         <div className="flex items-center justify-between border-b bg-muted/50 px-4 py-3">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <div className="size-2 rounded-full bg-green-500" />
-              <span className="font-medium text-sm">AI Assistant</span>
+              <div className={`size-2 rounded-full ${isModelLoaded ? 'bg-green-500' : isModelLoading ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'}`} />
+              <span className="font-medium text-sm">
+                {isModelLoaded ? 'Expense Analyzer' : isModelLoading ? 'Loading Model...' : 'Model Error'}
+              </span>
             </div>
             <div className="h-4 w-px bg-border" />
             <span className="text-muted-foreground text-xs">
-              {models.find(m => m.id === selectedModel)?.name}
+              {modelName || models.find(m => m.id === selectedModel)?.name}
             </span>
           </div>
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             size="sm"
             onClick={handleReset}
             className="h-8 px-2"
+            disabled={!isModelLoaded}
           >
             <RotateCcwIcon className="size-4" />
             <span className="ml-1">Reset</span>
           </Button>
         </div>
+
+        {/* Model Loading Progress */}
+        {isModelLoading && (
+          <div className="border-b bg-blue-50 dark:bg-blue-950/20 px-4 py-3">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-blue-900 dark:text-blue-100">{loadStatus}</span>
+                <span className="font-medium text-blue-900 dark:text-blue-100">{loadProgress}%</span>
+              </div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-blue-200 dark:bg-blue-900">
+                <div
+                  className="h-full bg-blue-600 transition-all duration-300 ease-out"
+                  style={{ width: `${loadProgress}%` }}
+                />
+              </div>
+              <p className="text-muted-foreground text-xs">
+                First load will download the AI model (~1GB). This will be cached for future use.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Model Error */}
+        {modelError && !isModelLoading && (
+          <div className="border-b bg-red-50 dark:bg-red-950/20 px-4 py-3">
+            <p className="text-red-900 dark:text-red-100 text-sm">
+              Error loading model: {modelError}
+            </p>
+          </div>
+        )}
 
         {/* Conversation Area */}
         <Conversation className="flex-1">
@@ -279,8 +318,8 @@ export default function Home() {
                   </PromptInputModelSelectContent>
                 </PromptInputModelSelect>
               </PromptInputTools>
-              <PromptInputSubmit 
-                disabled={!inputValue.trim() || isTyping}
+              <PromptInputSubmit
+                disabled={!inputValue.trim() || isTyping || !isModelLoaded}
                 status={isTyping ? 'streaming' : 'ready'}
               />
             </PromptInputToolbar>
