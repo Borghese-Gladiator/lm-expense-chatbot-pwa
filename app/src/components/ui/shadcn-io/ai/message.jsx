@@ -27,15 +27,15 @@ const MessageAvatar = React.forwardRef(({ className, src, name, ...props }, ref)
     <div
       ref={ref}
       className={cn(
-        "flex size-8 shrink-0 select-none items-center justify-center rounded-full bg-muted",
+        "flex size-9 shrink-0 select-none items-center justify-center rounded-full border border-border bg-muted",
         className
       )}
       {...props}
     >
       {src ? (
-        <img src={src} alt={name} className="size-8 rounded-full" />
+        <img src={src} alt={name} className="size-9 rounded-full" />
       ) : (
-        <span className="text-xs font-medium">{name?.[0]?.toUpperCase()}</span>
+        <span className="text-sm font-semibold">{name?.[0]?.toUpperCase()}</span>
       )}
     </div>
   );
@@ -58,10 +58,10 @@ const MessageContent = React.forwardRef(({ className, ...props }, ref) => {
     >
       <div
         className={cn(
-          "rounded-lg px-4 py-2.5 text-sm",
+          "max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed",
           from === "user"
-            ? "bg-primary text-primary-foreground"
-            : "bg-muted"
+            ? "bg-primary text-primary-foreground shadow-sm"
+            : "border border-border bg-muted"
         )}
         {...props}
       />

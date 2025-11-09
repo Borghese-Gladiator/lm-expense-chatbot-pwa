@@ -1,24 +1,10 @@
 'use client';
 
-import {
-  Conversation,
-  ConversationContent,
-  ConversationScrollButton,
-} from '@/components/ui/shadcn-io/ai/conversation';
 import { Loader } from '@/components/ui/shadcn-io/ai/loader';
-import { Message, MessageAvatar, MessageContent } from '@/components/ui/shadcn-io/ai/message';
 import {
   PromptInput,
-  PromptInputButton,
-  PromptInputModelSelect,
-  PromptInputModelSelectContent,
-  PromptInputModelSelectItem,
-  PromptInputModelSelectTrigger,
-  PromptInputModelSelectValue,
   PromptInputSubmit,
   PromptInputTextarea,
-  PromptInputToolbar,
-  PromptInputTools,
 } from '@/components/ui/shadcn-io/ai/prompt-input';
 import {
   Reasoning,
@@ -27,9 +13,9 @@ import {
 } from '@/components/ui/shadcn-io/ai/reasoning';
 import { Source, Sources, SourcesContent, SourcesTrigger } from '@/components/ui/shadcn-io/ai/source';
 import { Button } from '@/components/ui/button';
-import { MicIcon, PaperclipIcon, RotateCcwIcon } from 'lucide-react';
+import { ReceiptIcon, SquarePenIcon } from 'lucide-react';
 import { nanoid } from 'nanoid';
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useRef, useEffect } from 'react';
 
 const models = [
   { id: 'gpt-4o', name: 'GPT-4o' },
@@ -78,11 +64,20 @@ export default function Home() {
       ]
     }
   ]);
-  
+
   const [inputValue, setInputValue] = useState('');
   const [selectedModel, setSelectedModel] = useState(models[0].id);
   const [isTyping, setIsTyping] = useState(false);
   const [streamingMessageId, setStreamingMessageId] = useState(null);
+  const messagesEndRef = useRef(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
   
   const simulateTyping = useCallback((messageId, content, reasoning, sources) => {
     let currentIndex = 0;
@@ -168,123 +163,136 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4 dark:from-slate-950 dark:to-slate-900">
-      <div className="flex h-[800px] w-full max-w-4xl flex-col overflow-hidden rounded-xl border bg-background shadow-xl">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b bg-muted/50 px-4 py-3">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <div className="size-2 rounded-full bg-green-500" />
-              <span className="font-medium text-sm">AI Assistant</span>
-            </div>
-            <div className="h-4 w-px bg-border" />
-            <span className="text-muted-foreground text-xs">
-              {models.find(m => m.id === selectedModel)?.name}
-            </span>
+    <div className="flex min-h-screen flex-col bg-background">
+      {/* Sticky Navbar */}
+      <div className="sticky top-0 z-50 flex items-center justify-between border-b border-border bg-background px-4 py-3">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <ReceiptIcon className="h-5 w-5" />
           </div>
-          <Button 
-            variant="ghost" 
-            size="sm"
-            onClick={handleReset}
-            className="h-8 px-2"
-          >
-            <RotateCcwIcon className="size-4" />
-            <span className="ml-1">Reset</span>
-          </Button>
+          <span className="font-semibold text-lg">Expense Assistant</span>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleReset}
+          className="h-9 gap-2 px-3"
+        >
+          <SquarePenIcon className="h-4 w-4" />
+          <span>New Chat</span>
+        </Button>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex flex-1 flex-col">
 
         {/* Conversation Area */}
-        <Conversation className="flex-1">
-          <ConversationContent className="space-y-4">
-            {messages.map((message) => (
-              <div key={message.id} className="space-y-3">
-                <Message from={message.role}>
-                  <MessageContent>
+        <div className="flex-1 overflow-y-auto">
+          {messages.map((message, index) => (
+            <div
+              key={message.id}
+              className={message.role === 'assistant' ? 'bg-muted/50' : 'bg-background'}
+            >
+              <div className="mx-auto max-w-3xl px-4 py-6">
+                <div className="flex flex-col gap-2">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {message.role === 'user' ? 'You' : 'Assistant'}
+                  </div>
+                  <div className="prose prose-sm max-w-none dark:prose-invert">
                     {message.isStreaming && message.content === '' ? (
                       <div className="flex items-center gap-2">
                         <Loader size={14} />
                         <span className="text-muted-foreground text-sm">Thinking...</span>
                       </div>
                     ) : (
-                      message.content
+                      <div>{message.content}</div>
                     )}
-                  </MessageContent>
-                  <MessageAvatar 
-                    src={message.role === 'user' ? 'https://github.com/dovazencot.png' : 'https://github.com/vercel.png'} 
-                    name={message.role === 'user' ? 'User' : 'AI'} 
-                  />
-                </Message>
-
-                {/* Reasoning */}
-                {message.reasoning && (
-                  <div className="ml-10">
-                    <Reasoning isStreaming={message.isStreaming} defaultOpen={false}>
-                      <ReasoningTrigger />
-                      <ReasoningContent>{message.reasoning}</ReasoningContent>
-                    </Reasoning>
                   </div>
-                )}
 
-                {/* Sources */}
-                {message.sources && message.sources.length > 0 && (
-                  <div className="ml-10">
-                    <Sources>
-                      <SourcesTrigger count={message.sources.length} />
-                      <SourcesContent>
-                        {message.sources.map((source, index) => (
-                          <Source key={index} href={source.url} title={source.title} />
-                        ))}
-                      </SourcesContent>
-                    </Sources>
-                  </div>
-                )}
+                  {/* Reasoning */}
+                  {message.reasoning && (
+                    <div className="mt-2">
+                      <Reasoning isStreaming={message.isStreaming} defaultOpen={false}>
+                        <ReasoningTrigger />
+                        <ReasoningContent>{message.reasoning}</ReasoningContent>
+                      </Reasoning>
+                    </div>
+                  )}
+
+                  {/* Sources */}
+                  {message.sources && message.sources.length > 0 && (
+                    <div className="mt-2">
+                      <Sources>
+                        <SourcesTrigger count={message.sources.length} />
+                        <SourcesContent>
+                          {message.sources.map((source, index) => (
+                            <Source key={index} href={source.url} title={source.title} />
+                          ))}
+                        </SourcesContent>
+                      </Sources>
+                    </div>
+                  )}
+                </div>
               </div>
-            ))}
-          </ConversationContent>
-          <ConversationScrollButton />
-        </Conversation>
+            </div>
+          ))}
+          <div ref={messagesEndRef} />
+        </div>
 
         {/* Input Area */}
-        <div className="border-t p-4">
-          <PromptInput onSubmit={handleSubmit}>
-            <PromptInputTextarea
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              placeholder="Ask me anything about development, coding, or technology..."
-              disabled={isTyping}
-            />
-            <PromptInputToolbar>
-              <PromptInputTools>
-                <PromptInputButton disabled={isTyping}>
-                  <PaperclipIcon size={16} />
-                </PromptInputButton>
-                <PromptInputButton disabled={isTyping}>
-                  <MicIcon size={16} />
-                  <span>Voice</span>
-                </PromptInputButton>
-                <PromptInputModelSelect 
-                  value={selectedModel} 
-                  onValueChange={setSelectedModel}
+        <div className="border-t border-border bg-background px-4 py-6">
+          <div className="mx-auto max-w-3xl">
+            <PromptInput onSubmit={handleSubmit} className="shadow-md">
+              <div className="flex items-end gap-3">
+                <PromptInputTextarea
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  placeholder="Message Expense Assistant..."
                   disabled={isTyping}
-                >
-                  <PromptInputModelSelectTrigger>
-                    <PromptInputModelSelectValue />
-                  </PromptInputModelSelectTrigger>
-                  <PromptInputModelSelectContent>
-                    {models.map((model) => (
-                      <PromptInputModelSelectItem key={model.id} value={model.id}>
-                        {model.name}
-                      </PromptInputModelSelectItem>
-                    ))}
-                  </PromptInputModelSelectContent>
-                </PromptInputModelSelect>
-              </PromptInputTools>
-              <PromptInputSubmit 
-                disabled={!inputValue.trim() || isTyping}
-                status={isTyping ? 'streaming' : 'ready'}
-              />
-            </PromptInputToolbar>
-          </PromptInput>
+                  className="flex-1"
+                />
+                <PromptInputSubmit
+                  disabled={!inputValue.trim() || isTyping}
+                  status={isTyping ? 'streaming' : 'ready'}
+                  className="mb-0.5"
+                />
+              </div>
+              {/* Commented out: Attachment, Voice, and Model Selection
+              <PromptInputToolbar>
+                <PromptInputTools>
+                  <PromptInputButton disabled={isTyping} className="hover:bg-accent">
+                    <PaperclipIcon size={16} />
+                  </PromptInputButton>
+                  <PromptInputButton disabled={isTyping} className="hover:bg-accent">
+                    <MicIcon size={16} />
+                    <span>Voice</span>
+                  </PromptInputButton>
+                  <PromptInputModelSelect
+                    value={selectedModel}
+                    onValueChange={setSelectedModel}
+                    disabled={isTyping}
+                  >
+                    <PromptInputModelSelectTrigger>
+                      <PromptInputModelSelectValue />
+                    </PromptInputModelSelectTrigger>
+                    <PromptInputModelSelectContent>
+                      {models.map((model) => (
+                        <PromptInputModelSelectItem key={model.id} value={model.id}>
+                          {model.name}
+                        </PromptInputModelSelectItem>
+                      ))}
+                    </PromptInputModelSelectContent>
+                  </PromptInputModelSelect>
+                </PromptInputTools>
+                <PromptInputSubmit
+                  disabled={!inputValue.trim() || isTyping}
+                  status={isTyping ? 'streaming' : 'ready'}
+                  className="shadow-sm"
+                />
+              </PromptInputToolbar>
+              */}
+            </PromptInput>
+          </div>
         </div>
       </div>
     </div>

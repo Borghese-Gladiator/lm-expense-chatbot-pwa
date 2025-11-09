@@ -23,7 +23,7 @@ const PromptInput = React.forwardRef(({ className, onSubmit, ...props }, ref) =>
     <form
       ref={ref}
       onSubmit={handleSubmit}
-      className={cn("relative space-y-2 rounded-lg border bg-background p-2", className)}
+      className={cn("relative rounded-2xl border border-border bg-background px-4 py-3 transition-colors focus-within:border-border focus-within:shadow-lg", className)}
       {...props}
     />
   );
@@ -64,7 +64,7 @@ const PromptInputTextarea = React.forwardRef(
         ref={textareaRef}
         rows={1}
         className={cn(
-          "w-full resize-none bg-transparent px-2 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50",
+          "max-h-[200px] w-full resize-none bg-transparent px-0 py-1.5 text-sm placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50",
           className
         )}
         onInput={adjustHeight}
@@ -105,7 +105,7 @@ const PromptInputButton = React.forwardRef(({ className, ...props }, ref) => {
       type="button"
       variant="ghost"
       size="sm"
-      className={cn("h-8 gap-1.5 text-xs", className)}
+      className={cn("h-9 gap-2 rounded-lg px-3 text-xs font-medium transition-colors", className)}
       {...props}
     />
   );
@@ -120,20 +120,14 @@ const PromptInputSubmit = React.forwardRef(
       <Button
         ref={ref}
         type="submit"
-        size="sm"
-        className={cn("h-8 gap-1.5", className)}
+        size="icon"
+        className={cn("h-8 w-8 shrink-0 rounded-lg", className)}
         {...props}
       >
         {isStreaming ? (
-          <>
-            <SquareIcon className="size-3.5" />
-            Stop
-          </>
+          <SquareIcon className="h-4 w-4" />
         ) : (
-          <>
-            <SendIcon className="size-3.5" />
-            Send
-          </>
+          <SendIcon className="h-4 w-4" />
         )}
       </Button>
     );
@@ -166,7 +160,7 @@ const PromptInputModelSelectTrigger = React.forwardRef(
         ref={ref}
         disabled={disabled}
         className={cn(
-          "inline-flex h-8 items-center justify-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50",
+          "inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-input bg-background px-3 text-xs font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50",
           className
         )}
         {...props}

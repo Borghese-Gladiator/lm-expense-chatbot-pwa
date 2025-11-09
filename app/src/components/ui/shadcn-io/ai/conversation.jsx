@@ -46,7 +46,7 @@ const ConversationContent = React.forwardRef(({ className, ...props }, ref) => {
     <div
       ref={scrollRef}
       onScroll={handleScroll}
-      className={cn("h-full overflow-y-auto px-4 py-4", className)}
+      className={cn("h-full overflow-y-auto px-6 py-6", className)}
       {...props}
     />
   );
@@ -59,16 +59,16 @@ const ConversationScrollButton = React.forwardRef(({ className, ...props }, ref)
   if (!scrollButtonVisible) return null;
 
   return (
-    <div className="absolute bottom-4 right-4">
+    <div className="absolute bottom-6 right-6">
       <Button
         ref={ref}
         variant="outline"
         size="icon"
-        className={cn("size-8 rounded-full shadow-lg", className)}
+        className={cn("h-10 w-10 rounded-full shadow-md transition-all hover:scale-105", className)}
         onClick={scrollToBottom}
         {...props}
       >
-        <ArrowDownIcon className="size-4" />
+        <ArrowDownIcon className="h-5 w-5" />
       </Button>
     </div>
   );
