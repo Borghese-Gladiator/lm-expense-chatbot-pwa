@@ -1,5 +1,5 @@
-# app (MVP)
-This directory contains an Expense Summarizer chatbot app that analyzes spending history from Lunch Money on-device
+# LM Expense Tracker (MVP)
+This directory contains an expense tracking chatbot app that analyzes spending history on-device
 
 Web
 <screenshot>

@@ -1,8 +1,8 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "Expense Chatbot (Lunch Money)",
-  description: "Expense Summarizer chatbot app that analyzes spending history from Lunch Money on-device",
+  title: "LM Expense Tracker",
+  description: "Expense Tracker chatbot app that analyzes spending history on-device",
   icons: {
     icon: [
       { url: "/favicon/favicon.ico" },
