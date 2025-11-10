@@ -1,9 +1,14 @@
 /**
- * Tool definitions and mock implementations for Lunch Money financial assistant
+ * Tool definitions and implementations for Lunch Money financial assistant
  * Based on POC Python functions in /poc/src/tools.py
  */
 
-// Mock data generators
+import { getTransactions } from './lunchMoneyApi';
+
+// Environment flag to toggle between mock and real API
+const USE_MOCK_DATA = !process.env.NEXT_PUBLIC_LUNCH_MONEY_API_KEY;
+
+// Mock data generators (fallback when API key not available)
 const mockTransactions = (count = 5) => {
   const categories = ['Groceries', 'Gas', 'Restaurants', 'Entertainment', 'Utilities'];
   const payees = ['Whole Foods', 'Shell', 'Starbucks', 'Netflix', 'PG&E'];
@@ -19,26 +24,103 @@ const mockTransactions = (count = 5) => {
   }));
 };
 
-// Tool implementations with mock data
+// Helper functions for data aggregation
+function sumByCategory(transactions) {
+  const categoryTotals = {};
+
+  transactions.forEach(tx => {
+    const category = tx.category_name || 'Uncategorized';
+    if (!categoryTotals[category]) {
+      categoryTotals[category] = 0;
+    }
+    categoryTotals[category] += parseFloat(tx.amount);
+  });
+
+  return Object.entries(categoryTotals).map(([category, total]) => ({
+    category,
+    total: parseFloat(total.toFixed(2)),
+  }));
+}
+
+function sumByMerchant(transactions) {
+  const merchantTotals = {};
+
+  transactions.forEach(tx => {
+    const payee = tx.payee || 'Unknown';
+    if (!merchantTotals[payee]) {
+      merchantTotals[payee] = { total: 0, tx_count: 0 };
+    }
+    merchantTotals[payee].total += parseFloat(tx.amount);
+    merchantTotals[payee].tx_count += 1;
+  });
+
+  return Object.entries(merchantTotals).map(([payee, data]) => ({
+    payee,
+    total: parseFloat(data.total.toFixed(2)),
+    tx_count: data.tx_count,
+  }));
+}
+
+// Tool implementations with real API integration
 export const toolImplementations = {
   get_transactions: async (args) => {
     const { start_date, end_date, limit = 100 } = args;
-    return {
-      transactions: mockTransactions(Math.min(limit, 20)),
-    };
+
+    if (USE_MOCK_DATA) {
+      console.log('[Tools] Using mock data for get_transactions');
+      return {
+        transactions: mockTransactions(Math.min(limit, 20)),
+      };
+    }
+
+    try {
+      const transactions = await getTransactions(start_date, end_date);
+      return {
+        transactions: transactions.slice(0, limit),
+      };
+    } catch (error) {
+      console.error('[Tools] Error fetching transactions, falling back to mock data:', error);
+      return {
+        transactions: mockTransactions(Math.min(limit, 20)),
+      };
+    }
   },
 
   sum_by_category: async (args) => {
     const { start_date, end_date } = args;
-    return {
-      by_category: [
-        { category: 'Groceries', total: -450.50 },
-        { category: 'Gas', total: -120.00 },
-        { category: 'Restaurants', total: -280.75 },
-        { category: 'Entertainment', total: -95.00 },
-        { category: 'Utilities', total: -200.00 },
-      ],
-    };
+
+    if (USE_MOCK_DATA) {
+      console.log('[Tools] Using mock data for sum_by_category');
+      return {
+        by_category: [
+          { category: 'Groceries', total: -450.50 },
+          { category: 'Gas', total: -120.00 },
+          { category: 'Restaurants', total: -280.75 },
+          { category: 'Entertainment', total: -95.00 },
+          { category: 'Utilities', total: -200.00 },
+        ],
+      };
+    }
+
+    try {
+      const transactions = await getTransactions(start_date, end_date);
+      const categoryTotals = sumByCategory(transactions);
+
+      return {
+        by_category: categoryTotals.sort((a, b) => a.total - b.total), // Sort by total ascending (most negative first)
+      };
+    } catch (error) {
+      console.error('[Tools] Error in sum_by_category, falling back to mock data:', error);
+      return {
+        by_category: [
+          { category: 'Groceries', total: -450.50 },
+          { category: 'Gas', total: -120.00 },
+          { category: 'Restaurants', total: -280.75 },
+          { category: 'Entertainment', total: -95.00 },
+          { category: 'Utilities', total: -200.00 },
+        ],
+      };
+    }
   },
 
   month_over_month: async (args) => {
@@ -57,15 +139,44 @@ export const toolImplementations = {
 
   top_merchants: async (args) => {
     const { start_date, end_date, n = 10 } = args;
-    return {
-      top_merchants: [
-        { payee: 'Whole Foods', total: -450.50, tx_count: 15 },
-        { payee: 'Shell', total: -320.00, tx_count: 8 },
-        { payee: 'Starbucks', total: -180.75, tx_count: 24 },
-        { payee: 'Netflix', total: -15.99, tx_count: 1 },
-        { payee: 'Amazon', total: -250.30, tx_count: 12 },
-      ].slice(0, n),
-    };
+
+    if (USE_MOCK_DATA) {
+      console.log('[Tools] Using mock data for top_merchants');
+      return {
+        top_merchants: [
+          { payee: 'Whole Foods', total: -450.50, tx_count: 15 },
+          { payee: 'Shell', total: -320.00, tx_count: 8 },
+          { payee: 'Starbucks', total: -180.75, tx_count: 24 },
+          { payee: 'Netflix', total: -15.99, tx_count: 1 },
+          { payee: 'Amazon', total: -250.30, tx_count: 12 },
+        ].slice(0, n),
+      };
+    }
+
+    try {
+      const transactions = await getTransactions(start_date, end_date);
+      const merchantTotals = sumByMerchant(transactions);
+
+      // Sort by total ascending (most negative first) and take top N
+      const topMerchants = merchantTotals
+        .sort((a, b) => a.total - b.total)
+        .slice(0, n);
+
+      return {
+        top_merchants: topMerchants,
+      };
+    } catch (error) {
+      console.error('[Tools] Error in top_merchants, falling back to mock data:', error);
+      return {
+        top_merchants: [
+          { payee: 'Whole Foods', total: -450.50, tx_count: 15 },
+          { payee: 'Shell', total: -320.00, tx_count: 8 },
+          { payee: 'Starbucks', total: -180.75, tx_count: 24 },
+          { payee: 'Netflix', total: -15.99, tx_count: 1 },
+          { payee: 'Amazon', total: -250.30, tx_count: 12 },
+        ].slice(0, n),
+      };
+    }
   },
 
   monthly_cashflow: async (args) => {

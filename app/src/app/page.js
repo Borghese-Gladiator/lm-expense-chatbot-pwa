@@ -59,7 +59,7 @@ export default function Home() {
 
   const [messages, setMessages] = useState(getInitialMessages());
   const [inputValue, setInputValue] = useState('');
-  const [selectedModel, setSelectedModel] = useState('Qwen2.5-0.5B-Instruct-q4f16_1-MLC'); // Fastest model
+  const [selectedModel, setSelectedModel] = useState('Hermes-2-Pro-Mistral-7B-q4f16_1-MLC'); // Smallest model with function calling support
   const [isTyping, setIsTyping] = useState(false);
   const [streamingMessageId, setStreamingMessageId] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);

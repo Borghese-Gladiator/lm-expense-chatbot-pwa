@@ -15,27 +15,26 @@ export function useWebLLM() {
   const [error, setError] = useState(null);
   const engineRef = useRef(null);
 
-  // Available models - you can expand this list
+  // Available models with function calling support
+  // Only Hermes models support function calling in WebLLM
   const availableModels = [
     {
-      id: 'Llama-3.2-3B-Instruct-q4f16_1-MLC',
-      name: 'Llama 3.2 3B',
-      size: '~2GB',
+      id: 'Hermes-3-Llama-3.1-8B-q4f16_1-MLC',
+      name: 'Hermes 3 Llama 3.1 8B',
+      size: '~5GB',
+      supportsTools: true,
     },
     {
-      id: 'Llama-3.2-1B-Instruct-q4f16_1-MLC',
-      name: 'Llama 3.2 1B',
-      size: '~700MB',
+      id: 'Hermes-2-Pro-Llama-3-8B-q4f16_1-MLC',
+      name: 'Hermes 2 Pro Llama 3 8B',
+      size: '~5GB',
+      supportsTools: true,
     },
     {
-      id: 'Phi-3.5-mini-instruct-q4f16_1-MLC',
-      name: 'Phi 3.5 Mini',
-      size: '~2.3GB',
-    },
-    {
-      id: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC',
-      name: 'Qwen 2.5 0.5B',
-      size: '~350MB',
+      id: 'Hermes-2-Pro-Mistral-7B-q4f16_1-MLC',
+      name: 'Hermes 2 Pro Mistral 7B',
+      size: '~4.5GB',
+      supportsTools: true,
     },
   ];
 
