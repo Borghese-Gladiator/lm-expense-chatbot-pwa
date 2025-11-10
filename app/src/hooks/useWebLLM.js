@@ -77,32 +77,74 @@ export function useWebLLM() {
   }, []);
 
   /**
-   * Generate a chat completion (streaming)
+   * Generate a chat completion with optional function calling support (streaming)
    */
   const generateChatCompletion = useCallback(
-    async (messages, onChunk, onComplete) => {
+    async (messages, onChunk, onComplete, tools = null, onToolCall = null) => {
       if (!engine || !isModelLoaded) {
         throw new Error('Model not loaded. Please load a model first.');
       }
 
       try {
-        const completion = await engine.chat.completions.create({
+        // Prepare completion options
+        const completionOptions = {
           messages,
           stream: true,
           temperature: 0.7,
           max_tokens: 1024,
-        });
+        };
+
+        // Add tools if provided
+        if (tools && tools.length > 0) {
+          completionOptions.tools = tools;
+          completionOptions.tool_choice = 'auto';
+        }
+
+        const completion = await engine.chat.completions.create(completionOptions);
 
         let fullResponse = '';
+        let toolCalls = [];
 
         for await (const chunk of completion) {
-          const content = chunk.choices[0]?.delta?.content || '';
+          const delta = chunk.choices[0]?.delta;
+
+          // Handle text content
+          const content = delta?.content || '';
           if (content) {
             fullResponse += content;
             if (onChunk) {
               onChunk(content, fullResponse);
             }
           }
+
+          // Handle tool calls
+          if (delta?.tool_calls) {
+            for (const toolCall of delta.tool_calls) {
+              const index = toolCall.index;
+
+              if (!toolCalls[index]) {
+                toolCalls[index] = {
+                  id: toolCall.id || `call_${Date.now()}_${index}`,
+                  type: 'function',
+                  function: {
+                    name: toolCall.function?.name || '',
+                    arguments: toolCall.function?.arguments || '',
+                  },
+                };
+              } else {
+                // Accumulate arguments if streaming
+                if (toolCall.function?.arguments) {
+                  toolCalls[index].function.arguments += toolCall.function.arguments;
+                }
+              }
+            }
+          }
+        }
+
+        // If tool calls were made, execute them
+        if (toolCalls.length > 0 && onToolCall) {
+          const result = await onToolCall(toolCalls, fullResponse);
+          return result;
         }
 
         if (onComplete) {

@@ -18,6 +18,7 @@ import { ChatSidebar } from '@/components/ChatSidebar';
 import { useChatHistory } from '@/hooks/useChatHistory';
 import { useWebLLM } from '@/hooks/useWebLLM';
 import { useToast } from '@/hooks/use-toast';
+import { tools, executeTool } from '@/lib/tools';
 import { ReceiptIcon, SquarePenIcon, BrainCircuitIcon } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { useCallback, useState, useRef, useEffect } from 'react';
@@ -168,7 +169,7 @@ export default function Home() {
         content: msg.content,
       }));
 
-      // Generate completion with streaming
+      // Generate completion with streaming and tool support
       await generateChatCompletion(
         llmMessages,
         // onChunk callback
@@ -198,6 +199,90 @@ export default function Home() {
           }));
           setIsTyping(false);
           setStreamingMessageId(null);
+        },
+        // tools array
+        tools,
+        // onToolCall callback
+        async (toolCalls, textResponse) => {
+          // Show tool calling message
+          setMessages(prev => prev.map(msg => {
+            if (msg.id === assistantMessageId) {
+              return {
+                ...msg,
+                content: textResponse || 'Calling functions...',
+                isStreaming: true,
+                toolCalls: toolCalls,
+              };
+            }
+            return msg;
+          }));
+
+          // Execute all tool calls
+          const toolResults = [];
+          for (const toolCall of toolCalls) {
+            try {
+              const args = JSON.parse(toolCall.function.arguments);
+              const result = await executeTool(toolCall.function.name, args);
+              toolResults.push({
+                tool_call_id: toolCall.id,
+                role: 'tool',
+                name: toolCall.function.name,
+                content: JSON.stringify(result),
+              });
+            } catch (error) {
+              console.error('Tool execution error:', error);
+              toolResults.push({
+                tool_call_id: toolCall.id,
+                role: 'tool',
+                name: toolCall.function.name,
+                content: JSON.stringify({ error: error.message }),
+              });
+            }
+          }
+
+          // Add tool results to message history
+          const updatedMessages = [
+            ...llmMessages,
+            {
+              role: 'assistant',
+              content: textResponse || null,
+              tool_calls: toolCalls,
+            },
+            ...toolResults,
+          ];
+
+          // Get final response from LLM with tool results
+          await generateChatCompletion(
+            updatedMessages,
+            // onChunk callback for final response
+            (chunk, fullResponse) => {
+              setMessages(prev => prev.map(msg => {
+                if (msg.id === assistantMessageId) {
+                  return {
+                    ...msg,
+                    content: fullResponse,
+                    isStreaming: true,
+                  };
+                }
+                return msg;
+              }));
+            },
+            // onComplete callback for final response
+            (fullResponse) => {
+              setMessages(prev => prev.map(msg => {
+                if (msg.id === assistantMessageId) {
+                  return {
+                    ...msg,
+                    content: fullResponse,
+                    isStreaming: false,
+                  };
+                }
+                return msg;
+              }));
+              setIsTyping(false);
+              setStreamingMessageId(null);
+            }
+          );
         }
       );
     } catch (error) {
