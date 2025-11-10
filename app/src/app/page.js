@@ -27,13 +27,9 @@ import { useCallback, useState, useRef, useEffect } from 'react';
 const getInitialMessages = () => [
   {
     id: nanoid(),
-    content: "Hello! I'm your AI assistant. I can help you with coding questions, explain concepts, and provide guidance on web development topics. What would you like to know?",
+    content: "Hello! I'm your Personal Finance Assistant. I can help you understand and analyze your spending patterns from Lunch Money. Ask me about your transactions, spending by category, monthly trends, top merchants, budget health, and more. What would you like to know about your finances?",
     role: 'assistant',
     timestamp: new Date(),
-    sources: [
-      { title: "Getting Started Guide", url: "#" },
-      { title: "API Documentation", url: "#" }
-    ]
   }
 ];
 
@@ -164,10 +160,18 @@ export default function Home() {
 
     try {
       // Prepare messages for WebLLM (convert to OpenAI format)
-      const llmMessages = [...messages, userMessage].map(msg => ({
-        role: msg.role,
-        content: msg.content,
-      }));
+      const systemMessage = {
+        role: 'system',
+        content: 'You are a Personal Finance specialist assistant. You help users understand and analyze their spending patterns from Lunch Money. You have access to tools to retrieve transaction data, analyze spending by category, track monthly trends, identify top merchants, and check budget health. Always provide clear, actionable financial insights and be helpful in explaining spending patterns. Use the available tools when users ask about their finances.'
+      };
+
+      const llmMessages = [
+        systemMessage,
+        ...[...messages, userMessage].map(msg => ({
+          role: msg.role,
+          content: msg.content,
+        }))
+      ];
 
       // Generate completion with streaming and tool support
       await generateChatCompletion(
