@@ -12,14 +12,15 @@ const USE_MOCK_DATA = !process.env.NEXT_PUBLIC_LUNCH_MONEY_API_KEY;
 const mockTransactions = (count = 5) => {
   const categories = ['Groceries', 'Gas', 'Restaurants', 'Entertainment', 'Utilities'];
   const payees = ['Whole Foods', 'Shell', 'Starbucks', 'Netflix', 'PG&E'];
+  const notes = ['Weekly shopping', 'Fuel for work commute', 'Team lunch', 'Monthly subscription', ''];
 
   return Array.from({ length: count }, (_, i) => ({
     id: 1000 + i,
     date: new Date(Date.now() - Math.random() * 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     payee: payees[Math.floor(Math.random() * payees.length)],
     amount: -(Math.random() * 200 + 10).toFixed(2),
-    category: categories[Math.floor(Math.random() * categories.length)],
-    notes: '',
+    category_name: categories[Math.floor(Math.random() * categories.length)],
+    notes: notes[Math.floor(Math.random() * notes.length)],
     status: 'cleared',
   }));
 };

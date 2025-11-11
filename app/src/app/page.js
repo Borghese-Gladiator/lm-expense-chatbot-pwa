@@ -15,11 +15,13 @@ import { Source, Sources, SourcesContent, SourcesTrigger } from '@/components/ui
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ChatSidebar } from '@/components/ChatSidebar';
+import { TransactionsTable } from '@/components/TransactionsTable';
+import { Logo } from '@/components/Logo';
 import { useChatHistory } from '@/hooks/useChatHistory';
 import { useWebLLM } from '@/hooks/useWebLLM';
 import { useToast } from '@/hooks/use-toast';
 import { tools, executeTool } from '@/lib/tools';
-import { ReceiptIcon, SquarePenIcon, BrainCircuitIcon } from 'lucide-react';
+import { SquarePenIcon, BrainCircuitIcon } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { useCallback, useState, useRef, useEffect } from 'react';
 
@@ -162,7 +164,7 @@ export default function Home() {
       // Prepare messages for WebLLM (convert to OpenAI format)
       const systemMessage = {
         role: 'system',
-        content: 'You are a Personal Finance specialist assistant. You help users understand and analyze their spending patterns from Lunch Money. You have access to tools to retrieve transaction data, analyze spending by category, track monthly trends, identify top merchants, and check budget health. Always provide clear, actionable financial insights and be helpful in explaining spending patterns. Use the available tools when users ask about their finances.'
+        content: 'You are a Personal Finance specialist assistant. You help users understand and analyze their spending patterns from Lunch Money. You have access to tools to retrieve transaction data, analyze spending by category, track monthly trends, identify top merchants, and check budget health. Always provide clear, actionable financial insights and be helpful in explaining spending patterns. Use the available tools when users ask about their finances. When using get_transactions, the transactions will be automatically displayed in an interactive table below your response, so you can focus on providing insights and analysis rather than listing individual transactions.'
       };
 
       const llmMessages = [
@@ -223,10 +225,18 @@ export default function Home() {
 
           // Execute all tool calls
           const toolResults = [];
+          let tableData = null;
+
           for (const toolCall of toolCalls) {
             try {
               const args = JSON.parse(toolCall.function.arguments);
               const result = await executeTool(toolCall.function.name, args);
+
+              // Extract table data if the tool returns transactions
+              if (toolCall.function.name === 'get_transactions' && result.transactions) {
+                tableData = result.transactions;
+              }
+
               toolResults.push({
                 tool_call_id: toolCall.id,
                 role: 'tool',
@@ -279,6 +289,7 @@ export default function Home() {
                     ...msg,
                     content: fullResponse,
                     isStreaming: false,
+                    tableData: tableData, // Attach table data to the message
                   };
                 }
                 return msg;
@@ -357,22 +368,22 @@ export default function Home() {
         currentChatId={currentChatId}
         onSelectChat={handleSelectChat}
         onDeleteChat={handleDeleteChat}
+        onNewChat={handleReset}
         isOpen={isSidebarOpen}
         onToggle={setIsSidebarOpen}
       />
 
       {/* Main content area */}
       <div
-        className="flex flex-1 flex-col bg-background transition-all duration-300"
-        style={{ marginLeft: isSidebarOpen ? '280px' : '60px' }}
+        className={`flex flex-1 flex-col bg-background transition-all duration-300 ${
+          isSidebarOpen ? 'md:ml-[280px]' : 'md:ml-[60px]'
+        }`}
       >
         {/* Sticky Navbar - fully opaque */}
         <div className="sticky top-0 z-50 flex items-center justify-between border-b border-border bg-background px-4 py-3 shadow-sm">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <ReceiptIcon className="h-5 w-5" />
-            </div>
-            <span className="font-semibold text-lg">Expense Assistant</span>
+          <div className="flex items-center gap-2 ml-14 md:ml-0">
+            <Logo className="h-8 w-8 text-primary" />
+            <span className="hidden md:inline font-semibold text-lg">Expense Assistant</span>
           </div>
 
           <div className="flex items-center gap-2">
@@ -381,23 +392,13 @@ export default function Home() {
               variant={isModelLoaded ? "outline" : "default"}
               size="sm"
               onClick={() => setShowModelSelector(!showModelSelector)}
-              className="h-9 gap-2 px-3"
+              className="h-9 gap-2 px-2 md:px-3"
               disabled={isModelLoading}
             >
               <BrainCircuitIcon className="h-4 w-4" />
-              <span>
+              <span className="hidden sm:inline">
                 {isModelLoading ? 'Loading...' : isModelLoaded ? `${currentModel?.split('-')[0] || 'Model'}` : 'Load Model'}
               </span>
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleReset}
-              className="h-9 gap-2 px-3"
-            >
-              <SquarePenIcon className="h-4 w-4" />
-              <span>New Chat</span>
             </Button>
           </div>
         </div>
@@ -459,6 +460,13 @@ export default function Home() {
                         <div>{message.content}</div>
                       )}
                     </div>
+
+                    {/* Data Table */}
+                    {message.tableData && message.tableData.length > 0 && (
+                      <div className="mt-4">
+                        <TransactionsTable transactions={message.tableData} />
+                      </div>
+                    )}
 
                     {/* Reasoning */}
                     {message.reasoning && (

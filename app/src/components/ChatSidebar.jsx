@@ -5,6 +5,8 @@ import {
   PanelLeftIcon,
   MessageSquareIcon,
   TrashIcon,
+  MenuIcon,
+  SquarePenIcon,
 } from 'lucide-react';
 
 export function ChatSidebar({
@@ -12,6 +14,7 @@ export function ChatSidebar({
   currentChatId,
   onSelectChat,
   onDeleteChat,
+  onNewChat,
   isOpen = false,
   onToggle,
 }) {
@@ -45,14 +48,27 @@ export function ChatSidebar({
 
   return (
     <>
-      {/* Sidebar - always visible */}
+      {/* Floating Action Button - Mobile only */}
+      <Button
+        variant="default"
+        size="icon"
+        onClick={() => onToggle(!isOpen)}
+        className="fixed left-4 top-4 z-50 h-12 w-12 rounded-full shadow-lg md:hidden"
+        aria-label="Open menu"
+      >
+        <MenuIcon className="h-6 w-6" />
+      </Button>
+
+      {/* Sidebar - Desktop: always visible, Mobile: slides in from left */}
       <aside
-        className="fixed left-0 top-0 z-40 h-full border-r border-border bg-muted transition-all duration-300 ease-in-out"
+        className={`fixed left-0 top-0 z-40 h-full border-r border-border bg-muted transition-all duration-300 ease-in-out md:translate-x-0 ${
+          isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        }`}
         style={{ width: isOpen ? '280px' : '60px' }}
       >
         <div className="flex h-full flex-col">
-          {/* Toggle button at top */}
-          <div className={`flex items-center border-b border-border p-3 ${isOpen ? 'justify-end' : 'justify-center'}`}>
+          {/* Toggle button at top - Desktop only */}
+          <div className={`hidden md:flex items-center border-b border-border p-3 ${isOpen ? 'justify-end' : 'justify-center'}`}>
             <Button
               variant="ghost"
               size="icon"
@@ -64,10 +80,24 @@ export function ChatSidebar({
             </Button>
           </div>
 
-          {/* Chat history list - only visible when open */}
+          {/* Close button at top - Mobile only */}
+          <div className="flex md:hidden items-center justify-between border-b border-border p-3">
+            <h2 className="text-sm font-semibold">Chat History</h2>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onToggle(false)}
+              className="h-9 w-9"
+              aria-label="Close sidebar"
+            >
+              <PanelLeftIcon className="h-5 w-5" />
+            </Button>
+          </div>
+
+          {/* Chat history list - always visible on mobile when sidebar open, desktop depends on isOpen */}
           {isOpen && (
             <div className="flex-1 overflow-y-auto p-2">
-              <div className="mb-2 px-2 py-1">
+              <div className="mb-2 px-2 py-1 hidden md:block">
                 <h2 className="text-sm font-semibold text-muted-foreground">Chat History</h2>
               </div>
               {chats.length === 0 ? (
@@ -112,6 +142,20 @@ export function ChatSidebar({
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* New Chat Button - Desktop: only when open, Mobile: always visible when sidebar open */}
+          {isOpen && (
+            <div className="border-t border-border p-3">
+              <Button
+                onClick={onNewChat}
+                className="w-full gap-2"
+                variant="default"
+              >
+                <SquarePenIcon className="h-4 w-4" />
+                <span>New Chat</span>
+              </Button>
             </div>
           )}
         </div>

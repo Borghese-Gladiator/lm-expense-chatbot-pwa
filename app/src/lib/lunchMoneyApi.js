@@ -68,7 +68,94 @@ async function fetchTransactionsFromApi(startDate, endDate, options = {}) {
 }
 
 /**
- * Get transactions with caching support
+ * Check if requested date range is fully contained within any cached range
+ * @param {string} startDate - Start date in YYYY-MM-DD format
+ * @param {string} endDate - End date in YYYY-MM-DD format
+ * @returns {Array|null} Filtered transactions or null if not found
+ */
+function findInCachedRange(startDate, endDate) {
+  for (const [key, transactions] of Object.entries(transactionCache)) {
+    const [cachedStart, cachedEnd] = key.split('_');
+
+    // Check if requested range is fully within cached range
+    if (cachedStart <= startDate && cachedEnd >= endDate) {
+      console.log(`[Transaction Cache] Range ${startDate} to ${endDate} found within cached ${cachedStart} to ${cachedEnd}`);
+
+      // Filter cached transactions to requested range
+      const filtered = transactions.filter(tx => {
+        const txDate = tx.date;
+        return txDate >= startDate && txDate <= endDate;
+      });
+
+      return filtered;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Find all cached ranges that overlap with requested range
+ * @param {string} startDate - Start date in YYYY-MM-DD format
+ * @param {string} endDate - End date in YYYY-MM-DD format
+ * @returns {Array} Array of overlapping range keys
+ */
+function findOverlappingRanges(startDate, endDate) {
+  const overlapping = [];
+
+  for (const key of Object.keys(transactionCache)) {
+    const [cachedStart, cachedEnd] = key.split('_');
+
+    // Check if ranges overlap
+    if (cachedStart <= endDate && cachedEnd >= startDate) {
+      overlapping.push({ key, start: cachedStart, end: cachedEnd });
+    }
+  }
+
+  return overlapping;
+}
+
+/**
+ * Calculate missing date ranges that need to be fetched
+ * @param {string} startDate - Start date in YYYY-MM-DD format
+ * @param {string} endDate - End date in YYYY-MM-DD format
+ * @param {Array} overlapping - Array of overlapping cached ranges
+ * @returns {Array} Array of {start, end} objects for missing ranges
+ */
+function calculateMissingRanges(startDate, endDate, overlapping) {
+  if (overlapping.length === 0) {
+    return [{ start: startDate, end: endDate }];
+  }
+
+  // Sort overlapping ranges by start date
+  overlapping.sort((a, b) => a.start.localeCompare(b.start));
+
+  const missing = [];
+  let currentStart = startDate;
+
+  for (const range of overlapping) {
+    // If there's a gap before this cached range
+    if (currentStart < range.start) {
+      missing.push({ start: currentStart, end: range.start });
+    }
+
+    // Move current start to end of this cached range
+    if (range.end > currentStart) {
+      currentStart = range.end > endDate ? endDate : range.end;
+    }
+  }
+
+  // Check if there's a gap after all cached ranges
+  if (currentStart < endDate) {
+    missing.push({ start: currentStart, end: endDate });
+  }
+
+  return missing;
+}
+
+/**
+ * Get transactions with smart caching support
+ * Handles exact matches, subset ranges, and overlapping ranges
  * @param {string} startDate - Start date in YYYY-MM-DD format
  * @param {string} endDate - End date in YYYY-MM-DD format
  * @param {Object} options - Additional query parameters
@@ -77,14 +164,78 @@ async function fetchTransactionsFromApi(startDate, endDate, options = {}) {
 export async function getTransactions(startDate, endDate, options = {}) {
   const cacheKey = getCacheKey(startDate, endDate);
 
-  // Check cache
+  // 1. Check for exact match
   if (transactionCache[cacheKey]) {
-    console.log(`[Transaction Cache] Cache hit for ${startDate} to ${endDate}`);
+    console.log(`[Transaction Cache] Exact cache hit for ${startDate} to ${endDate}`);
     return transactionCache[cacheKey];
   }
 
-  // Cache miss - fetch from API
-  console.log(`[Transaction Cache] Cache miss for ${startDate} to ${endDate}`);
+  // 2. Check if requested range is within any cached range
+  const cachedSubset = findInCachedRange(startDate, endDate);
+  if (cachedSubset) {
+    console.log(`[Transaction Cache] Subset cache hit for ${startDate} to ${endDate}`);
+    // Store this specific range for future exact matches
+    transactionCache[cacheKey] = cachedSubset;
+    return cachedSubset;
+  }
+
+  // 3. Check for overlapping ranges
+  const overlapping = findOverlappingRanges(startDate, endDate);
+
+  if (overlapping.length > 0) {
+    console.log(`[Transaction Cache] Partial cache hit - found ${overlapping.length} overlapping range(s)`);
+
+    // Calculate which date ranges we still need to fetch
+    const missingRanges = calculateMissingRanges(startDate, endDate, overlapping);
+
+    if (missingRanges.length === 0) {
+      // All data is cached, just need to merge and filter
+      console.log(`[Transaction Cache] All data available in overlapping caches`);
+      const allTransactions = overlapping.flatMap(range => transactionCache[range.key]);
+
+      // Filter to requested range and deduplicate
+      const filtered = Array.from(
+        new Map(
+          allTransactions
+            .filter(tx => tx.date >= startDate && tx.date <= endDate)
+            .map(tx => [tx.id, tx])
+        ).values()
+      );
+
+      // Store this specific range
+      transactionCache[cacheKey] = filtered;
+      return filtered;
+    }
+
+    // Fetch missing ranges and merge with cached data
+    console.log(`[Transaction Cache] Fetching ${missingRanges.length} missing range(s)`);
+    const missingTransactions = [];
+
+    for (const range of missingRanges) {
+      const fetched = await fetchTransactionsFromApi(range.start, range.end, options);
+      missingTransactions.push(...fetched);
+    }
+
+    // Merge cached and newly fetched transactions
+    const cachedTransactions = overlapping.flatMap(range => transactionCache[range.key]);
+    const allTransactions = [...cachedTransactions, ...missingTransactions];
+
+    // Filter to requested range and deduplicate
+    const filtered = Array.from(
+      new Map(
+        allTransactions
+          .filter(tx => tx.date >= startDate && tx.date <= endDate)
+          .map(tx => [tx.id, tx])
+      ).values()
+    );
+
+    // Store in cache
+    transactionCache[cacheKey] = filtered;
+    return filtered;
+  }
+
+  // 4. Complete cache miss - fetch from API
+  console.log(`[Transaction Cache] Complete cache miss for ${startDate} to ${endDate}`);
   const transactions = await fetchTransactionsFromApi(startDate, endDate, options);
 
   // Store in cache
