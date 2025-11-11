@@ -48,17 +48,6 @@ export function ChatSidebar({
 
   return (
     <>
-      {/* Floating Action Button - Mobile only */}
-      <Button
-        variant="default"
-        size="icon"
-        onClick={() => onToggle(!isOpen)}
-        className="fixed left-4 top-4 z-50 h-12 w-12 rounded-full shadow-lg md:hidden"
-        aria-label="Open menu"
-      >
-        <MenuIcon className="h-6 w-6" />
-      </Button>
-
       {/* Sidebar - Desktop: always visible, Mobile: slides in from left */}
       <aside
         className={`fixed left-0 top-0 z-40 h-full border-r border-border bg-muted transition-all duration-300 ease-in-out md:translate-x-0 ${

@@ -22,7 +22,7 @@ import { useChatHistory } from '@/hooks/useChatHistory';
 import { useWebLLM } from '@/hooks/useWebLLM';
 import { useToast } from '@/hooks/use-toast';
 import { tools, executeTool } from '@/lib/tools';
-import { SquarePenIcon, BrainCircuitIcon } from 'lucide-react';
+import { SquarePenIcon, BrainCircuitIcon, MenuIcon } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { useCallback, useState, useRef, useEffect } from 'react';
 
@@ -163,13 +163,9 @@ export default function Home() {
 
     try {
       // Prepare messages for WebLLM (convert to OpenAI format)
-      const systemMessage = {
-        role: 'system',
-        content: 'You are a Personal Finance specialist assistant. You help users understand and analyze their spending patterns from Lunch Money. You have access to tools to retrieve transaction data, analyze spending by category, track monthly trends, identify top merchants, and check budget health. Always provide clear, actionable financial insights and be helpful in explaining spending patterns. Use the available tools when users ask about their finances. When using get_transactions, the transactions will be automatically displayed in an interactive table below your response, so you can focus on providing insights and analysis rather than listing individual transactions. You can also generate visual charts using the generate_chart tool - when users ask for graphs, charts, or visualizations, use this tool to create area, bar, or line charts from the financial data. Charts will be automatically rendered below your response.'
-      };
-
+      // Note: Hermes-2-Pro with function calling doesn't support custom system prompts
+      // The system behavior is built into the model itself
       const llmMessages = [
-        systemMessage,
         ...[...messages, userMessage].map(msg => ({
           role: msg.role,
           content: msg.content,
@@ -389,23 +385,35 @@ export default function Home() {
       >
         {/* Sticky Navbar - fully opaque */}
         <div className="sticky top-0 z-50 flex items-center justify-between border-b border-border bg-background px-4 py-3 shadow-sm">
-          <div className="flex items-center gap-2 ml-14 md:ml-0">
-            <Logo className="h-8 w-8 text-primary" />
+          <div className="flex items-center gap-3">
+            {/* Menu button - Mobile only */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className="h-9 w-9 md:hidden"
+              aria-label="Toggle menu"
+            >
+              <MenuIcon className="h-5 w-5" />
+            </Button>
+
+            {/* Logo and Title */}
+            <Logo className="h-10 w-10 text-primary" />
             <span className="hidden md:inline font-semibold text-lg">Expense Assistant</span>
           </div>
 
           <div className="flex items-center gap-2">
             {/* Model Status/Selector */}
             <Button
-              variant={isModelLoaded ? "outline" : "default"}
+              variant="outline"
               size="sm"
               onClick={() => setShowModelSelector(!showModelSelector)}
-              className="h-9 gap-2 px-2 md:px-3"
+              className="h-9 gap-2 px-3"
               disabled={isModelLoading}
             >
               <BrainCircuitIcon className="h-4 w-4" />
               <span className="hidden sm:inline">
-                {isModelLoading ? 'Loading...' : isModelLoaded ? `${currentModel?.split('-')[0] || 'Model'}` : 'Load Model'}
+                {isModelLoading ? 'Loading...' : isModelLoaded ? currentModel : 'Load Model'}
               </span>
             </Button>
           </div>

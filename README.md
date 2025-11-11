@@ -256,6 +256,31 @@ Without an API key, the app uses mock data automatically.
 
 ---
 
+## Future Enhancements
+
+### Backend Service Integration
+- [ ] **Python API with MCP Server Integration**
+  - Build FastAPI/Flask backend service
+  - Integrate official Lunch Money MCP server for standardized tool access
+  - OR implement custom tool calling layer for more control
+  - Evaluate trade-offs: MCP standard compliance vs custom flexibility
+  - Consider WebSocket for real-time updates
+  - Add server-side caching and rate limiting
+
+### Cost Analysis for Cloud LLMs
+- [ ] **OpenAI API Viability Study**
+  - Calculate estimated API costs based on usage patterns
+  - Compare OpenAI GPT-4/GPT-3.5 vs on-device WebLLM
+  - Analyze trade-offs:
+    - Cost per user per month
+    - Response quality and accuracy
+    - Latency improvements
+    - Privacy implications (data leaving device)
+  - Consider hybrid approach: on-device for basic queries, cloud for complex analysis
+  - Evaluate alternative providers (Anthropic Claude, Google Gemini, Mistral API)
+
+---
+
 ## Contributing
 
 1. Fork the repository

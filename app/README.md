@@ -15,10 +15,30 @@ An AI-powered personal finance assistant that analyzes spending patterns from Lu
 ## Screenshots
 
 Web
-<screenshot>
+![alt text](screenshot_web.png)
 
 Mobile
-<screenshot>
+![alt text](screenshot_mobile.png)
+
+### Usage
+
+Monthly Overview:
+"Summarize my spending for the last month, broken down by category, and highlight the top 3 areas where I spent the most."
+
+Trends Over Time:
+"Compare my monthly spending over the last 6 months and tell me which categories are increasing or decreasing."
+
+Budget Analysis:
+"Based on my current spending patterns, which categories should I cut back on to stay within a $3,000 monthly budget?"
+
+Merchant Insights:
+"Identify the merchants where I spend the most and suggest ways to reduce costs at those places."
+
+Anomaly Detection:
+"Find any unusual or one-time expenses in my transactions over the last 3 months and explain why they stand out."
+
+
+
 
 ## Tech Stack
 
