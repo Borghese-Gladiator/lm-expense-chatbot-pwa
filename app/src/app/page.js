@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ChatSidebar } from '@/components/ChatSidebar';
 import { TransactionsTable } from '@/components/TransactionsTable';
+import { FinancialChart } from '@/components/FinancialChart';
 import { Logo } from '@/components/Logo';
 import { useChatHistory } from '@/hooks/useChatHistory';
 import { useWebLLM } from '@/hooks/useWebLLM';
@@ -164,7 +165,7 @@ export default function Home() {
       // Prepare messages for WebLLM (convert to OpenAI format)
       const systemMessage = {
         role: 'system',
-        content: 'You are a Personal Finance specialist assistant. You help users understand and analyze their spending patterns from Lunch Money. You have access to tools to retrieve transaction data, analyze spending by category, track monthly trends, identify top merchants, and check budget health. Always provide clear, actionable financial insights and be helpful in explaining spending patterns. Use the available tools when users ask about their finances. When using get_transactions, the transactions will be automatically displayed in an interactive table below your response, so you can focus on providing insights and analysis rather than listing individual transactions.'
+        content: 'You are a Personal Finance specialist assistant. You help users understand and analyze their spending patterns from Lunch Money. You have access to tools to retrieve transaction data, analyze spending by category, track monthly trends, identify top merchants, and check budget health. Always provide clear, actionable financial insights and be helpful in explaining spending patterns. Use the available tools when users ask about their finances. When using get_transactions, the transactions will be automatically displayed in an interactive table below your response, so you can focus on providing insights and analysis rather than listing individual transactions. You can also generate visual charts using the generate_chart tool - when users ask for graphs, charts, or visualizations, use this tool to create area, bar, or line charts from the financial data. Charts will be automatically rendered below your response.'
       };
 
       const llmMessages = [
@@ -226,6 +227,7 @@ export default function Home() {
           // Execute all tool calls
           const toolResults = [];
           let tableData = null;
+          let chartData = null;
 
           for (const toolCall of toolCalls) {
             try {
@@ -235,6 +237,11 @@ export default function Home() {
               // Extract table data if the tool returns transactions
               if (toolCall.function.name === 'get_transactions' && result.transactions) {
                 tableData = result.transactions;
+              }
+
+              // Extract chart data if the tool returns chartData
+              if (toolCall.function.name === 'generate_chart' && result.chartData) {
+                chartData = result.chartData;
               }
 
               toolResults.push({
@@ -290,6 +297,7 @@ export default function Home() {
                     content: fullResponse,
                     isStreaming: false,
                     tableData: tableData, // Attach table data to the message
+                    chartData: chartData, // Attach chart data to the message
                   };
                 }
                 return msg;
@@ -465,6 +473,13 @@ export default function Home() {
                     {message.tableData && message.tableData.length > 0 && (
                       <div className="mt-4">
                         <TransactionsTable transactions={message.tableData} />
+                      </div>
+                    )}
+
+                    {/* Chart */}
+                    {message.chartData && (
+                      <div className="mt-4">
+                        <FinancialChart chartData={message.chartData} />
                       </div>
                     )}
 

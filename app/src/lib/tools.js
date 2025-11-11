@@ -249,6 +249,121 @@ export const toolImplementations = {
       ],
     };
   },
+
+  generate_chart: async (args) => {
+    const { chart_type, tool_name, tool_args } = args;
+
+    // Execute the data tool
+    const dataResult = await toolImplementations[tool_name](tool_args);
+
+    // Transform data based on the tool and chart type
+    if (tool_name === 'sum_by_category') {
+      const chartData = dataResult.by_category.map(item => ({
+        category: item.category,
+        spending: Math.abs(item.total),
+      }));
+
+      return {
+        chartData: {
+          type: chart_type || 'bar',
+          title: 'Spending by Category',
+          description: `From ${tool_args.start_date} to ${tool_args.end_date}`,
+          data: chartData,
+          xAxisKey: 'category',
+          dataKeys: ['spending'],
+          config: {
+            spending: {
+              label: 'Spending',
+              color: 'hsl(var(--chart-1))',
+            },
+          },
+        },
+      };
+    }
+
+    if (tool_name === 'month_over_month') {
+      const chartData = dataResult.mom.map(item => ({
+        month: item.month,
+        spending: Math.abs(item.total),
+      }));
+
+      return {
+        chartData: {
+          type: chart_type || 'area',
+          title: 'Monthly Spending Trend',
+          description: 'Spending over time',
+          data: chartData,
+          xAxisKey: 'month',
+          dataKeys: ['spending'],
+          config: {
+            spending: {
+              label: 'Total Spending',
+              color: 'hsl(var(--chart-1))',
+            },
+          },
+        },
+      };
+    }
+
+    if (tool_name === 'monthly_cashflow') {
+      const chartData = dataResult.cashflow.map(item => ({
+        month: item.month,
+        income: item.income,
+        expenses: Math.abs(item.expenses),
+        net: item.net,
+      }));
+
+      return {
+        chartData: {
+          type: chart_type || 'area',
+          title: 'Monthly Cashflow',
+          description: 'Income vs Expenses',
+          data: chartData,
+          xAxisKey: 'month',
+          dataKeys: ['income', 'expenses'],
+          config: {
+            income: {
+              label: 'Income',
+              color: 'hsl(var(--chart-2))',
+            },
+            expenses: {
+              label: 'Expenses',
+              color: 'hsl(var(--chart-5))',
+            },
+          },
+        },
+      };
+    }
+
+    if (tool_name === 'top_merchants') {
+      const chartData = dataResult.top_merchants.map(item => ({
+        merchant: item.payee,
+        spending: Math.abs(item.total),
+      }));
+
+      return {
+        chartData: {
+          type: chart_type || 'bar',
+          title: 'Top Merchants',
+          description: `From ${tool_args.start_date} to ${tool_args.end_date}`,
+          data: chartData,
+          xAxisKey: 'merchant',
+          dataKeys: ['spending'],
+          config: {
+            spending: {
+              label: 'Total Spending',
+              color: 'hsl(var(--chart-3))',
+            },
+          },
+        },
+      };
+    }
+
+    return {
+      chartData: null,
+      error: 'Chart generation not supported for this tool',
+    };
+  },
 };
 
 // Tool schemas for function calling (OpenAI format)
@@ -419,6 +534,33 @@ export const tools = [
       parameters: {
         type: 'object',
         properties: {},
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'generate_chart',
+      description: 'Generate a visual chart from financial data. Supports area, bar, and line charts. Use this when the user asks for visualizations, graphs, or charts.',
+      parameters: {
+        type: 'object',
+        properties: {
+          chart_type: {
+            type: 'string',
+            enum: ['area', 'bar', 'line'],
+            description: 'Type of chart to generate (area for trends, bar for comparisons, line for time series)',
+          },
+          tool_name: {
+            type: 'string',
+            enum: ['sum_by_category', 'month_over_month', 'monthly_cashflow', 'top_merchants'],
+            description: 'The data tool to use for generating chart data',
+          },
+          tool_args: {
+            type: 'object',
+            description: 'Arguments to pass to the data tool (e.g., {start_date, end_date} or {start_month, months})',
+          },
+        },
+        required: ['tool_name', 'tool_args'],
       },
     },
   },
