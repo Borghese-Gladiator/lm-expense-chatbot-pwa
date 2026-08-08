@@ -1,0 +1,1 @@
+"""LunchMoney integration package."""
