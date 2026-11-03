@@ -1,34 +1,12 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Finance Analyst</title>
-  <link rel="stylesheet" href="/styles.css" />
-  <script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
-  <script src="https://cdn.jsdelivr.net/npm/vega-lite@5"></script>
-  <script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
-</head>
-<body>
-  <header>
-    <h1>Finance Analyst</h1>
-    <button id="sync-btn" type="button">Sync data</button>
-    <span id="sync-status"></span>
-  </header>
-
-  <main>
-    <form id="query-form">
-      <input
-        id="question"
-        type="text"
-        placeholder="e.g. How much did I spend last month by category?"
-        autocomplete="off"
-      />
-      <button type="submit">Ask</button>
-    </form>
-    <div id="results"></div>
-  </main>
-
-  <script src="/app.js"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ledgerlens</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>

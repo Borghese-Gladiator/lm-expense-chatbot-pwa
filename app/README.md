@@ -1,78 +1,76 @@
-# Finance Analyst
+# Ledgerlens
 
-A single-agent personal-finance analyst. It syncs [LunchMoney](https://lunchmoney.app)
-transactions into a local DuckDB warehouse, exposes a **read-only** semantic layer, and lets
-an Anthropic-powered analyst answer natural-language questions by writing validated SQL and
-composing an `AnswerEnvelope` of insight / metric / table / chart blocks (Vega-Lite). A minimal
-browser UI renders the answers.
+A standalone, analytics-first personal finance app. It has no budgets. It focuses on transactions you can explain:
+every number opens the transactions behind it.
 
-## Highlights
-- **Read-only by construction.** The agent's only tools are `get_finance_catalog`,
-  `query_finance`, and `create_view`. A hard SQL validator (see `docs/validation.md`) rejects
-  anything that isn't a single `SELECT`/`WITH` over approved analytics views.
-- **The model never sees the LunchMoney token.** The token is a `SecretStr`, injected only into
-  the `Authorization` header, never logged, never in errors, never sent to the model.
-- **Grounded insights.** Every stated number is derived from facts returned by the executor.
-- **Result reuse.** "Show that chart as a table" reuses the prior `result_id` — no re-query.
+- **Data in:** Plaid bank sync, CSV import (including the Lunch Money export), and manual entry. The app does not depend on another finance app.
+- **Analysis:** Overview, the Explore query builder (measure × metric × up to 2 dimensions × filters × period comparison), drill-down, one-off exclusion, and saved analyses.
+- **Organization:** search, inline and bulk edits, categories with groups and kinds, tags, notes, a reviewed flag, and CSV export.
+- **Ask (optional):** a question in plain language becomes a structured query that you can check and change. The model gets names only (categories, accounts, tags, merchants), never transactions.
 
-## Layout
+## Stack
+
+FastAPI + DuckDB (one local file) for the backend. React + Vite + ECharts for the frontend.
+
 ```
 app/
-  config.py            Settings (SecretStr token/keys, DB path, limits)
-  main.py              FastAPI app factory + lifespan (shared httpx client + DuckDB + agent)
-  models/              Pydantic contracts (queries, answers, domain)
-  lunchmoney/          client (async, retries, redaction), sync, normalization
-  analytics/           DuckDB schema, semantic views, SQL validator, result registry
-  agent/               analyst loop, three restricted tools, prompts, catalog
-  visualization/       ViewSpec schemas, validator, Vega-Lite compiler
-  api/                 sync / query / results / health routers + deps
-frontend/              static HTML/JS/CSS UI (Vega-Embed)
-types/contracts.ts     TypeScript equivalents of the Pydantic contracts
-docs/                  architecture, semantic-model, api-contracts, analyst-skill, validation
-tests/                 unit, integration, golden (>=25 Qs), security
-scripts/               manual_check.py, demo_server.py (fixture-backed, no API keys)
+  db.py          schema + `reportable` view (split parents removed, names joined)
+  analytics.py   AnalyticsQuery -> parameterized SQL, comparison, drill-down
+  csv_import.py  header aliases, debit/credit columns, idempotent dedupe
+  plaid.py       Link, token exchange, cursor /transactions/sync
+  crypto.py      Fernet encryption for Plaid access tokens
+  ask.py         question -> AnalyticsQuery (structured output)
+  main.py        all API routes + serves frontend/dist
+frontend/src/    pages: Overview, Explore, Transactions, Accounts, Settings
+tests/           analytics semantics, CSV import, Plaid sync, API
+scripts/         seed_demo.py, manual_check.py
 ```
 
 ## Setup
+
 ```bash
-uv venv --python 3.10
-uv pip install -e ".[dev]"
-cp .env.example .env   # fill in LUNCHMONEY_TOKEN + ANTHROPIC_API_KEY
+uv sync --extra dev
+npm install --prefix frontend
+npm run build --prefix frontend
 ```
 
-Environment variables (`.env`):
+Configure with environment variables or a `.env` file:
 
-| var | meaning | default |
-|-----|---------|---------|
-| `LUNCHMONEY_TOKEN` | LunchMoney access token (SecretStr) | — |
-| `ANTHROPIC_API_KEY` | Anthropic API key (SecretStr) | — |
-| `DUCKDB_PATH` | DuckDB file path | `finance.duckdb` |
-| `HTTP_TIMEOUT_SECONDS` | shared httpx timeout | `30.0` |
-| `MODEL` | Anthropic model id | `claude-3-5-sonnet-latest` |
-| `BASE_CURRENCY` | base currency for `to_base` amounts | `usd` |
+| Variable | Use | Default |
+|---|---|---|
+| `DUCKDB_PATH` | Database file | `finance.duckdb` |
+| `CURRENCY` | Reporting currency | `USD` |
+| `APP_SECRET_KEY` | Encrypts bank tokens (16+ characters). Do not change it after you connect a bank. | — |
+| `PLAID_CLIENT_ID`, `PLAID_SECRET` | Plaid keys | — |
+| `PLAID_ENV` | `sandbox` or `production` | `sandbox` |
+| `ANTHROPIC_API_KEY` | Turns on Ask | — |
+| `MODEL` | Model for Ask | `claude-opus-5-5` |
 
 ## Run
-```bash
-# real app (needs API keys)
-uv run uvicorn app.main:app --reload
 
-# fixture-backed demo (no keys) — serves the UI + mock data
-PYTHONPATH=. .venv/bin/python scripts/demo_server.py   # http://127.0.0.1:8123
+```bash
+uv run python scripts/seed_demo.py demo.duckdb        # optional: 2 years of fake data
+DUCKDB_PATH=demo.duckdb uv run uvicorn app.main:app   # http://127.0.0.1:8000
 ```
 
-Then open the UI, click **Sync data**, and ask e.g. *"How much did I spend by category?"*.
+For frontend development, run `npm run dev --prefix frontend`. Vite sends `/api` requests to port 8000.
 
-## API
-`POST /api/sync`, `POST /api/query`, `GET /api/results/{id}`, `GET /api/results/{id}/rows`,
-`GET /api/health`. Full schemas in `docs/api-contracts.md` (Addendum A).
+To move from Lunch Money, export your transactions as CSV in Lunch Money. Then import the file on the Accounts page. The import creates accounts, categories, and groups by name. A second import of the same file adds nothing.
 
-## Quality gates
+## How totals work
+
+- A negative amount is money out. **Spending** is expenses with the sign flipped, so a refund reduces spending.
+- **Transfers** and **adjustments** never count toward spending, income, or net. A category's kind sets the type, and a type that you set on a transaction wins.
+- **Pending** transactions and categories marked "exclude" are left out unless you include them.
+- When a transaction is split, only the child rows count, so the parent is not counted two times.
+- **Previous period** for a full calendar month (or a run of full months) is the same number of calendar months before it. For any other range, it is a range of the same length that ends the day before.
+
+## Checks
+
 ```bash
-.venv/bin/python -m pytest      # unit + integration + golden + security
-.venv/bin/ruff check .
-.venv/bin/mypy app
-PYTHONPATH=. .venv/bin/python scripts/manual_check.py   # 7 acceptance Qs, reuse, security
+uv run pytest
+uv run ruff check app tests
+uv run mypy app
+npm run check-types --prefix frontend
+PYTHONPATH=. uv run python scripts/manual_check.py
 ```
-
-## Architecture
-See `docs/architecture.md` for the layered data flow and mermaid diagram.
