@@ -16,7 +16,7 @@ An AI-powered personal finance assistant that analyzes spending patterns from Lu
 
 This repository contains two implementations:
 
-### 📱 [`app/`](./app) - Production MVP (JavaScript)
+### 📱 [`app_v0.2/`](./app_v0.2) - Production MVP (JavaScript)
 **Status:** ✅ Complete and production-ready
 
 Modern web app built with:
@@ -34,7 +34,7 @@ Modern web app built with:
 - Model selection UI with progress tracking
 - Toast notifications and loading states
 
-[See full documentation →](./app/README.md)
+[See full documentation →](./app_v0.2/README.md)
 
 **Screenshots:**
 
@@ -46,7 +46,7 @@ Mobile
 
 ---
 
-### 🐍 [`poc/`](./poc) - Proof of Concept (Python)
+### 🐍 [`poc_v0.1/`](./poc_v0.1) - Proof of Concept (Python)
 **Status:** Initial prototype
 
 Python prototype using:
@@ -57,7 +57,7 @@ Python prototype using:
 
 **Directory Structure:**
 ```
-poc/
+poc_v0.1/
 ├── src/
 │   ├── app.py          # Streamlit chat application
 │   ├── tools.py        # Financial analysis tools (9 functions)
@@ -71,7 +71,7 @@ poc/
 
 **Quick Start:**
 ```bash
-cd poc
+cd poc_v0.1
 
 # Install Ollama and pull model
 ollama pull llama3.1:8b
@@ -94,18 +94,18 @@ This POC proved the concept and tool definitions that were later implemented in 
 
 ## Quick Start
 
-These instructions are for running the **app/** MVP. For the Python POC, see the [POC section](#-poc---proof-of-concept-python) above.
+These instructions are for running the **app_v0.2/** MVP. For the Python POC, see the [POC section](#-poc_v01---proof-of-concept-python) above.
 
 ### Prerequisites
 - Node.js 18+ and Yarn
 - A modern browser with WebGPU support (Chrome 113+, Edge 113+)
 - (Optional) Lunch Money API key from [my.lunchmoney.app/developers](https://my.lunchmoney.app/developers)
 
-### Running the MVP (app/)
+### Running the MVP (app_v0.2/)
 
 ```bash
 # Navigate to app directory
-cd app
+cd app_v0.2
 
 # Install dependencies
 yarn install
@@ -127,20 +127,20 @@ Open [http://localhost:3000](http://localhost:3000)
 
 Without an API key, the app uses mock data for demonstration.
 
-See [app/README.md](./app/README.md) for detailed documentation.
+See [app_v0.2/README.md](./app_v0.2/README.md) for detailed documentation.
 
 ---
 
 ## Tech Stack
 
-### MVP (app/)
+### MVP (app_v0.2/)
 - **Frontend**: Next.js 16, React, Tailwind CSS v4
 - **AI**: WebLLM, Hermes models with function calling
 - **UI**: shadcn/ui, Radix UI primitives
 - **PWA**: Serwist service worker
 - **API**: Lunch Money REST API with caching
 
-### POC (poc/)
+### POC (poc_v0.1/)
 - **Framework**: Streamlit
 - **AI**: Ollama
 - **Language**: Python
@@ -238,13 +238,13 @@ Cache key: `{startDate}_{endDate}`
 - Semantic versioning commits
 - Production deployment
 
-See [How It Was Built](./app/README.md#how-it-was-built) for detailed steps.
+See [How It Was Built](./app_v0.2/README.md#how-it-was-built) for detailed steps.
 
 ---
 
 ## Environment Variables
 
-Create `app/.env.local`:
+Create `app_v0.2/.env.local`:
 
 ```bash
 # Lunch Money API Key (optional)
@@ -307,7 +307,7 @@ Without an API key, the app uses mock data automatically.
 - Check Lunch Money API status
 - App auto-falls back to mock data
 
-See [full troubleshooting guide](./app/README.md#troubleshooting) for more.
+See [full troubleshooting guide](./app_v0.2/README.md#troubleshooting) for more.
 
 ---
 
@@ -317,7 +317,7 @@ See [full troubleshooting guide](./app/README.md#troubleshooting) for more.
 
 ## Acknowledgments
 
-- Python POC implementation in `poc/src/tools.py`
+- Python POC implementation in `poc_v0.1/src/tools.py`
 - [shadcn/ui](https://ui.shadcn.com) for excellent component library
 - [WebLLM](https://webllm.mlc.ai/) team for browser-based LLM inference
 - [Lunch Money](https://lunchmoney.app) for comprehensive financial API
