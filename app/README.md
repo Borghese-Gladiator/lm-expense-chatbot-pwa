@@ -1,4 +1,4 @@
-# Ledgerlens
+# Spend Lens (SL)
 
 A standalone, analytics-first personal finance app. It has no budgets. It focuses on transactions you can explain:
 every number opens the transactions behind it.

@@ -1,5 +1,5 @@
 [project]
-name = "ledgerlens"
+name = "spend-lens"
 version = "0.2.0"
 description = "Standalone analytics-first personal finance app"
 requires-python = ">=3.10"

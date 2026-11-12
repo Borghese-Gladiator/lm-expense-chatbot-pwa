@@ -60,7 +60,7 @@ def create_link_token(client: PlaidClient) -> str:
     data = client.post(
         "/link/token/create",
         {
-            "client_name": "Ledgerlens",
+            "client_name": "Spend Lens",
             "language": "en",
             "country_codes": ["US", "CA"],
             "user": {"client_user_id": "owner"},

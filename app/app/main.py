@@ -499,7 +499,7 @@ def plaid_sync(item_pk: int, request: Request, db: duckdb.DuckDBPyConnection = D
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Ledgerlens", lifespan=lifespan)
+    app = FastAPI(title="Spend Lens", lifespan=lifespan)
     app.include_router(api)
     if DIST.exists():
         app.mount("/assets", StaticFiles(directory=DIST / "assets"), name="assets")

@@ -60,7 +60,7 @@ function App() {
   return (
     <Ctx.Provider value={{ meta, reloadMeta, openDrill: setDrill, openTxn: setTxnId, version, bump }}>
       <nav className="nav">
-        <span className="brand">Ledgerlens</span>
+        <span className="brand"><span className="mark" aria-hidden="true">SL</span>Spend Lens</span>
         {(Object.keys(PAGES) as PageId[]).map((id) => (
           <a key={id} href={`#${id}`} aria-current={page === id ? "page" : undefined}>
             {PAGES[id].label}

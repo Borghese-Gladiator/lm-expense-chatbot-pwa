@@ -1,4 +1,4 @@
-# PRD: Analytics-First Personal Finance App (Ledgerlens)
+# PRD: Spend Lens (SL), an Analytics-First Personal Finance App
 
 **Status:** Draft v0.3
 **Product type:** Standalone personal finance application
@@ -9,7 +9,7 @@ The next work items are in [docs/TODO.md](docs/TODO.md). This document says what
 
 ## 1. Product vision
 
-Ledgerlens has the transaction management and automation of Lunch Money. Its analytics are much stronger.
+Spend Lens (SL) has the transaction management and automation of Lunch Money. Its analytics are much stronger.
 
 The user connects banks, imports transactions, manages categories, automates classification, and explores the data in interactive reports. The product has no budgets. It answers three questions:
 
@@ -306,7 +306,7 @@ The migration is one time only. It moves:
 | Tags | Built | |
 | Split and grouped transactions | Not started | The CSV export does not keep these links reliably. |
 | Recurring items | Not started | |
-| Rules | Not planned | The user makes them again in Ledgerlens. |
+| Rules | Not planned | The user makes them again in Spend Lens. |
 
 **Reconciliation (P0, Not started):** When Plaid imports history that the CSV migration already holds, the app must not make duplicates. Each Plaid account must also map to its migrated account. See TODO for the approach.
 

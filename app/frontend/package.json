@@ -1,5 +1,5 @@
 {
-  "name": "ledgerlens-web",
+  "name": "spend-lens-web",
   "private": true,
   "type": "module",
   "scripts": {
