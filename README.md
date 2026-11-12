@@ -14,9 +14,12 @@ An AI-powered personal finance assistant that analyzes spending patterns from Lu
 
 ## Project Structure
 
-This repository contains two implementations:
+This repository contains three versions. The current version is in `app/`.
 
-### 📱 [`app_v0.2/`](./app_v0.2) - Production MVP (JavaScript)
+### 🔍 [`app/`](./app) - Spend Lens (SL), current version
+A standalone, analytics-first finance app with Plaid bank sync. It does not need Lunch Money. It uses FastAPI, DuckDB, React, and ECharts. See [app/README.md](./app/README.md) and [app/PRD.md](./app/PRD.md).
+
+### 📱 [`app_v0.2/`](./app_v0.2) - WebLLM PWA (JavaScript), v0.2
 **Status:** ✅ Complete and production-ready
 
 Modern web app built with:
