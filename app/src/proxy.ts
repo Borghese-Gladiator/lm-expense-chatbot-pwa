@@ -1,7 +1,7 @@
 import { authorize } from "./auth";
 
-export function proxy(request: Request) {
-  return authorize(request) ?? undefined;
+export async function proxy(request: Request) {
+  return (await authorize(request)) ?? undefined;
 }
 
 export const config = {

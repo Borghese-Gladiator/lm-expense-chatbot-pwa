@@ -26,6 +26,11 @@ const pageFromHash = (): PageId => {
   return id in PAGES ? id : "overview";
 };
 
+async function signOut() {
+  await fetch("/api/logout", { method: "POST" });
+  location.href = "/login";
+}
+
 export default function App() {
   const { meta, reloadMeta } = useMeta();
   const [page, setPage] = useState<PageId>(pageFromHash);
@@ -68,6 +73,7 @@ export default function App() {
               <Badge radius="sm" aria-hidden="true">SL</Badge>
               <Text fw={700}>Spend Lens</Text>
             </Group>
+            <Button variant="subtle" size="xs" ml="auto" onClick={signOut}>Sign out</Button>
           </Group>
         </AppShell.Header>
         <AppShell.Navbar p="xs" style={mobile && !opened ? { visibility: "hidden" } : undefined}>
