@@ -10,7 +10,7 @@ import {
   runQuery,
   whereClause,
 } from "./analytics";
-import { ask } from "./ask";
+import { mockAsk, mockFetch, mockSettings, seedIfEmpty } from "./mock";
 import { loadSettings, type Settings } from "./config";
 import { CsvImportSchema, importCsv } from "./csv";
 import { one, openDb, scalar, type Db, type Row } from "./db";
@@ -179,7 +179,7 @@ const ROUTES: [string, string, Handler][] = [
       const { question } = AskRequest.parse(body);
       if (!settings.anthropicApiKey) throw new HttpError(503, "set ANTHROPIC_API_KEY to use Ask");
       try {
-        return await ask(db, settings, question);
+        return await mockAsk(db, question);
       } catch (e) {
         if (e instanceof Anthropic.APIError || e instanceof Error)
           throw new HttpError(502, `Ask failed: ${e.constructor.name}`);
@@ -487,8 +487,10 @@ let shared: Promise<Ctx> | undefined;
 
 export function sharedCtx(): Promise<Ctx> {
   shared ??= (async () => {
-    const settings = loadSettings();
-    return { settings, db: await openDb(settings), plaid: new plaid.PlaidClient(settings) };
+    const settings = mockSettings(loadSettings());
+    const db = await openDb(settings);
+    await seedIfEmpty(db);
+    return { settings, db, plaid: new plaid.PlaidClient(settings, mockFetch) };
   })().catch((e) => {
     shared = undefined;
     throw e;

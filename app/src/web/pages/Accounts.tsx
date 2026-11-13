@@ -71,8 +71,12 @@ export function Accounts() {
 
   const connect = () =>
     run("Opening Plaid", async () => {
-      await loadPlaid();
       const { link_token } = await api<{ link_token: string }>("/plaid/link-token", {});
+      if (link_token === "mock-link-token") {
+        const r = await api<{ added: number }>("/plaid/exchange", { public_token: "mock-public-token", institution: "Mock Bank" });
+        return `Connected (mock). Imported ${r.added} transactions.`;
+      }
+      await loadPlaid();
       return new Promise<string>((resolve, reject) => {
         window.Plaid!.create({
           token: link_token,
