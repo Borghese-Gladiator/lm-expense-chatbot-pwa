@@ -1,5 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 
+import { loadSettings } from "./server/config";
+
 const same = (a: string, b: string) =>
   a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
@@ -13,7 +15,8 @@ export function authorize(req: Request, env: NodeJS.ProcessEnv = process.env): R
   const header = req.headers.get("authorization") ?? "";
   const path = new URL(req.url).pathname;
   if (path.startsWith("/api/cron/")) {
-    if (env.CRON_SECRET && same(header, `Bearer ${env.CRON_SECRET}`)) return null;
+    const { cronSecret } = loadSettings(env);
+    if (cronSecret && same(header, `Bearer ${cronSecret}`)) return null;
     return new Response("unauthorized", { status: 401 });
   }
   const password = env.APP_PASSWORD;

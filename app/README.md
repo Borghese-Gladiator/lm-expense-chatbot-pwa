@@ -31,10 +31,11 @@ scripts/seed-demo.ts
 ## Run on your machine
 
 ```bash
-npm install
-npm run seed     # optional: 2 years of fake data
+npm run setup    # install, make .env with new secrets, seed 2 years of fake data
 npm run dev      # http://localhost:3000
 ```
+
+`npm run setup` does not change an existing `.env`, and it seeds only an empty database.
 
 With no `DATABASE_URL`, the app keeps its data in PGlite (Postgres in the Node process) in `.data/pglite`.
 Run `npm run dev` or `npm run seed` one at a time, because PGlite opens the folder for one process only.
@@ -42,7 +43,7 @@ Run `npm run dev` or `npm run seed` one at a time, because PGlite opens the fold
 ## Deploy to Vercel
 
 1. In the Vercel project, open **Storage** and add a **Neon** Postgres database. This sets `DATABASE_URL`.
-2. In **Settings → Environment Variables**, set `APP_PASSWORD`, `CRON_SECRET`, and `APP_SECRET_KEY`. Add the Plaid and Anthropic keys if you use them.
+2. In **Settings → Environment Variables**, set `APP_PASSWORD` and `ROOT_SECRET`. To let Vercel Cron call the sync, also set `CRON_SECRET`, because Vercel sends only that variable. Add the Plaid and Anthropic keys if you use them.
 3. Deploy. The tables are made on the first request.
 
 `vercel.json` runs `/api/cron/sync` one time each day (the Hobby plan limit). Vercel sends `CRON_SECRET` with the request.
@@ -55,8 +56,9 @@ Run `npm run dev` or `npm run seed` one at a time, because PGlite opens the fold
 | `DATABASE_URL_POOLED` | Pooled Postgres connection (for example Neon `-pooler`) for queries | `DATABASE_URL` |
 | `PGLITE_DIR` | PGlite data folder | `.data/pglite` |
 | `APP_PASSWORD` | Shared password. Required on Vercel. | — |
-| `CRON_SECRET` | Lets Vercel Cron call `/api/cron/sync` | — |
-| `APP_SECRET_KEY` | Encrypts bank tokens (16+ characters). Do not change it after you connect a bank. | — |
+| `ROOT_SECRET` | Root secret. The app derives `APP_SECRET_KEY` and `CRON_SECRET` from it when they are not set. Do not change it after you connect a bank. | — |
+| `CRON_SECRET` | Lets Vercel Cron call `/api/cron/sync` | derived from `ROOT_SECRET` |
+| `APP_SECRET_KEY` | Encrypts bank tokens (16+ characters). If you set it before, keep it, so that stored bank tokens stay readable. | derived from `ROOT_SECRET` |
 | `PLAID_CLIENT_ID`, `PLAID_SECRET` | Plaid keys | — |
 | `PLAID_ENV` | `sandbox` or `production` | `sandbox` |
 | `ANTHROPIC_API_KEY` | Turns on Ask | — |

@@ -9,7 +9,8 @@
     "start": "next start",
     "test": "vitest run",
     "check-types": "tsc --noEmit",
-    "seed": "tsx scripts/seed-demo.ts"
+    "seed": "tsx scripts/seed-demo.ts",
+    "setup": "npm install && tsx scripts/setup.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.3.0",
