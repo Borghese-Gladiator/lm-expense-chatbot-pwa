@@ -1,4 +1,4 @@
-import { Alert, Badge, Center, Checkbox, Drawer, Group, Loader, Table, Text, Title } from "@mantine/core";
+import { Alert, Badge, Button, Center, Checkbox, Drawer, Group, Loader, Table, Text, Title } from "@mantine/core";
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 
 import type { Drill, Meta, Txn } from "./api";
@@ -36,7 +36,7 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[]) {
   return { data, error, loading };
 }
 
-export function Status({
+export function LoadState({
   loading, error, empty, emptyText = "No transactions match these filters.",
 }: { loading?: boolean; error?: string | null; empty?: boolean; emptyText?: string }) {
   if (error) return <Alert color="red" role="alert" my="md">{error}</Alert>;
@@ -49,7 +49,7 @@ export function Amount({ v }: { v: number }) {
   return <Text span inherit c={v > 0 ? "teal" : undefined} style={{ whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{money2(v)}</Text>;
 }
 
-export function TxnTable({
+export function TransactionTable({
   items,
   onRowClick,
   selected,
@@ -110,7 +110,7 @@ export function TxnTable({
   );
 }
 
-export function DrillDrawer({ drill, onClose }: { drill: Drill; onClose: () => void }) {
+export function DrilldownDrawer({ drill, onClose }: { drill: Drill; onClose: () => void }) {
   const { openTxn, version } = useApp();
   const [query, setQuery] = useState(drill.query);
   useEffect(() => setQuery(drill.query), [drill]);
@@ -147,17 +147,17 @@ export function DrillDrawer({ drill, onClose }: { drill: Drill; onClose: () => v
         </div>
       }
     >
-      <Status loading={loading} error={error} empty={data?.count === 0} />
+      <LoadState loading={loading} error={error} empty={data?.count === 0} />
       {data && data.count > 0 && (
-        <TxnTable
+        <TransactionTable
           items={data.transactions}
           onRowClick={(t) => openTxn(t.id)}
           extra={
             onExclude
               ? (t) => (
-                  <button className="small" title="Leave this transaction out of the analysis" onClick={() => onExclude(t.id)}>
+                  <Button size="compact-xs" variant="default" title="Leave this transaction out of the analysis" onClick={() => onExclude(t.id)}>
                     Exclude
-                  </button>
+                  </Button>
                 )
               : undefined
           }

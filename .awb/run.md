@@ -14,5 +14,5 @@ ready: /api/health
 
 ## test
 ```sh
-cd app && npx vitest run --reporter=junit --outputFile={report} {tests}
+npx --prefix app vitest run --root . --no-cache --no-fsModuleCache --reporter=junit --outputFile={report} {tests}
 ```

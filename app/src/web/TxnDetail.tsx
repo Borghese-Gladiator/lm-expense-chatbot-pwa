@@ -1,9 +1,11 @@
-import { Drawer, Text, Title } from "@mantine/core";
+import {
+  Button, Checkbox, Code, Drawer, Group, NativeSelect, SimpleGrid, Table, Text, Textarea, TextInput, Title,
+} from "@mantine/core";
 import { useState } from "react";
 
 import { api } from "./api";
 import { money2 } from "./format";
-import { Status, useApp, useAsync } from "./shared";
+import { LoadState, useApp, useAsync } from "./shared";
 
 interface Detail {
   id: number;
@@ -41,7 +43,7 @@ export function TxnDetail({ id, onClose }: { id: number; onClose: () => void }) 
     </Drawer>
   );
 
-  if (!data) return shell(<Title order={2} size="h4">Transaction</Title>, <Status loading={loading} error={error} />);
+  if (!data) return shell(<Title order={2} size="h4">Transaction</Title>, <LoadState loading={loading} error={error} />);
 
   const v = { ...data, ...draft };
   const save = async () => {
@@ -73,47 +75,49 @@ export function TxnDetail({ id, onClose }: { id: number; onClose: () => void }) 
       <Text c="dimmed" size="sm">{data.date} · {data.account} · {money2(data.amount)} {data.currency}</Text>
     </div>,
     <>
-      <div className="form">
-        <label>Merchant<input value={v.merchant ?? ""} onChange={(e) => setDraft({ ...draft, merchant: e.target.value })} /></label>
-        <label>Category
-          <select value={v.category_id ?? ""} onChange={(e) => setDraft({ ...draft, category_id: e.target.value ? Number(e.target.value) : null })}>
-            <option value="">Uncategorized</option>
-            {meta?.categories.filter((c) => !c.archived || c.id === v.category_id).map((c) => (
-              <option key={c.id} value={c.id}>{c.group_name ? `${c.group_name} › ` : ""}{c.name}</option>
-            ))}
-          </select>
-        </label>
-        <label>Type
-          <select value={v.type ?? ""} onChange={(e) => setDraft({ ...draft, type: e.target.value || null })}>
-            <option value="">From category</option>
-            <option value="expense">Expense</option>
-            <option value="income">Income</option>
-            <option value="transfer">Transfer</option>
-            <option value="adjustment">Adjustment</option>
-          </select>
-        </label>
-        <label>Tags (comma separated)
-          <input value={draft.tagText ?? data.tags.join(", ")} onChange={(e) => setDraft({ ...draft, tagText: e.target.value })} />
-        </label>
-        <label>Notes<textarea rows={2} value={v.notes ?? ""} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} /></label>
-        <label className="check">
-          <input type="checkbox" checked={v.reviewed} onChange={(e) => setDraft({ ...draft, reviewed: e.target.checked })} /> Reviewed
-        </label>
-        <div className="row">
-          <button onClick={save} disabled={saving || Object.keys(draft).length === 0}>{saving ? "Saving…" : "Save"}</button>
-          {saveError && <span className="error">{saveError}</span>}
-        </div>
-      </div>
-      <h3>Source record</h3>
-      <dl className="kv">
-        <dt>Payee (raw)</dt><dd>{data.payee_raw ?? "—"}</dd>
-        <dt>Source</dt><dd>{data.source}{data.source_id ? ` · ${data.source_id}` : ""}</dd>
-        <dt>Status</dt><dd>{data.is_pending ? "Pending" : "Posted"}{data.user_edited ? " · edited by you" : ""}</dd>
-        <dt>Updated</dt><dd>{data.updated_at}</dd>
-      </dl>
+      <SimpleGrid cols={{ base: 1, sm: 2 }}>
+        <TextInput label="Merchant" value={v.merchant ?? ""} onChange={(e) => setDraft({ ...draft, merchant: e.target.value })} />
+        <NativeSelect
+          label="Category"
+          value={v.category_id ?? ""}
+          onChange={(e) => setDraft({ ...draft, category_id: e.target.value ? Number(e.target.value) : null })}
+        >
+          <option value="">Uncategorized</option>
+          {meta?.categories.filter((c) => !c.archived || c.id === v.category_id).map((c) => (
+            <option key={c.id} value={c.id}>{c.group_name ? `${c.group_name} › ` : ""}{c.name}</option>
+          ))}
+        </NativeSelect>
+        <NativeSelect label="Type" value={v.type ?? ""} onChange={(e) => setDraft({ ...draft, type: e.target.value || null })}>
+          <option value="">From category</option>
+          <option value="expense">Expense</option>
+          <option value="income">Income</option>
+          <option value="transfer">Transfer</option>
+          <option value="adjustment">Adjustment</option>
+        </NativeSelect>
+        <TextInput
+          label="Tags (comma separated)"
+          value={draft.tagText ?? data.tags.join(", ")}
+          onChange={(e) => setDraft({ ...draft, tagText: e.target.value })}
+        />
+      </SimpleGrid>
+      <Textarea mt="sm" label="Notes" rows={2} value={v.notes ?? ""} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} />
+      <Checkbox mt="sm" label="Reviewed" checked={v.reviewed} onChange={(e) => setDraft({ ...draft, reviewed: e.currentTarget.checked })} />
+      <Group mt="md">
+        <Button onClick={save} disabled={Object.keys(draft).length === 0} loading={saving}>Save</Button>
+        {saveError && <Text c="red" size="sm">{saveError}</Text>}
+      </Group>
+      <Title order={3} size="h6" mt="xl" mb="xs">Source record</Title>
+      <Table fz="sm" withRowBorders={false} verticalSpacing={2}>
+        <Table.Tbody>
+          <Table.Tr><Table.Th w={120}>Payee (raw)</Table.Th><Table.Td>{data.payee_raw ?? "—"}</Table.Td></Table.Tr>
+          <Table.Tr><Table.Th>Source</Table.Th><Table.Td>{data.source}{data.source_id ? ` · ${data.source_id}` : ""}</Table.Td></Table.Tr>
+          <Table.Tr><Table.Th>Status</Table.Th><Table.Td>{data.is_pending ? "Pending" : "Posted"}{data.user_edited ? " · edited by you" : ""}</Table.Td></Table.Tr>
+          <Table.Tr><Table.Th>Updated</Table.Th><Table.Td>{data.updated_at}</Table.Td></Table.Tr>
+        </Table.Tbody>
+      </Table>
       <details>
         <summary>Raw data</summary>
-        <pre>{JSON.stringify(data.raw, null, 2)}</pre>
+        <Code block mah={320} style={{ overflow: "auto" }}>{JSON.stringify(data.raw, null, 2)}</Code>
       </details>
     </>,
   );
