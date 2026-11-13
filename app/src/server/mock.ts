@@ -1,7 +1,8 @@
 /** Demo mode: fake Plaid, fake Ask, and seed data. Revert the commit that adds this file to go back to real calls. */
 import type { AnalyticsQuery } from "./analytics";
 import type { AskResult } from "./ask";
-import type { Settings } from "./config";
+import { loadSettings, type Settings } from "./config";
+import { encrypt } from "./crypto";
 import { categoryIdFor, scalar, type Db } from "./db";
 
 export const mockSettings = (s: Settings): Settings => ({
@@ -145,6 +146,9 @@ export async function seedDemo(db: Db): Promise<number> {
         "Top merchants", JSON.stringify({ measure: "spending", metric: "total", dimensions: ["merchant"], filters: {}, compare: "none", limit: 15 }),
       ],
     );
+    await tx.query("INSERT INTO plaid_items (item_id, institution, access_token_enc) VALUES ('mock-item', 'Mock Bank', ?)", [
+      encrypt("mock-access-token", mockSettings(loadSettings()).appSecretKey),
+    ]);
   });
   return rows.length;
 }
