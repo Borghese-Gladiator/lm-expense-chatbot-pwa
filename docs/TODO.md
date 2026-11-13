@@ -6,7 +6,7 @@ The work items are in order inside each section. Requirement IDs refer to [PRD.m
 
 - [ ] Test Plaid with sandbox keys. Connect a sandbox bank, sync, and check that pending, posted, and removed rows are correct (BANK-01).
 - [ ] Test Ask with a real API key. Check that the model returns a valid `AnalyticsQuery` for 10 typical questions.
-- [ ] Measure report speed on 50,000 seeded transactions. The target is less than 2 seconds.
+- [x] Measure report speed on 50,000 seeded transactions. The target is less than 2 seconds.
 
 ## Milestone 1: Independent foundation
 
@@ -20,13 +20,13 @@ The work items are in order inside each section. Requirement IDs refer to [PRD.m
 
 The goal is the same features on Mantine components, with no new features. At the end, `styles.css` and the hand-built components are gone.
 
-- [ ] **Add Mantine.** Install `@mantine/core`, `@mantine/hooks`, and `@mantine/dates`. Add `MantineProvider` and `ColorSchemeScript` in `layout.tsx`. Set the theme (primary color, font, radius). Use the Mantine automatic color scheme for dark mode.
-- [ ] **Layout and navigation.** Replace the `nav` in `App.tsx` with `AppShell`. Show a header with a burger menu on small screens and a navbar on large screens. Keep hash routing.
-- [ ] **Shared components.** Replace `Status` with `Loader` and `Alert`. Replace `TxnTable` with `Table`. Replace `DrillDrawer` and `TxnDetail` with `Drawer`. Keep `Amount` as a small wrapper on `Text`.
-- [ ] **Convert each page.** Do one page in each commit: Overview, Transactions, Accounts, Settings, Explore. Use `Select`, `MultiSelect`, `TextInput`, `NumberInput`, `Button`, `Card`, `Tabs`, and `Modal`. Use `DatePickerInput` with `type="range"` for the custom date range in Explore.
-- [ ] **Notifications.** Add `@mantine/notifications` for save, import, and sync results. Remove inline success and error text where a notification is more clear.
-- [ ] **Charts.** Keep ECharts. Make the chart colors follow the Mantine theme and the color scheme.
-- [ ] **Clean up.** Delete `styles.css` and the unused components. Check that each page works in light mode and in dark mode.
+- [x] **Add Mantine.** Install `@mantine/core`, `@mantine/hooks`, and `@mantine/dates`. Add `MantineProvider` and `ColorSchemeScript` in `layout.tsx`. Set the theme (primary color, font, radius). Use the Mantine automatic color scheme for dark mode.
+- [x] **Layout and navigation.** Replace the `nav` in `App.tsx` with `AppShell`. Show a header with a burger menu on small screens and a navbar on large screens. Keep hash routing.
+- [x] **Shared components.** Replace `Status` with `Loader` and `Alert`. Replace `TxnTable` with `Table`. Replace `DrillDrawer` and `TxnDetail` with `Drawer`. Keep `Amount` as a small wrapper on `Text`.
+- [x] **Convert each page.** Do one page in each commit: Overview, Transactions, Accounts, Settings, Explore. Use `Select`, `MultiSelect`, `TextInput`, `NumberInput`, `Button`, `Card`, `Tabs`, and `Modal`. Use `DatePickerInput` with `type="range"` for the custom date range in Explore.
+- [x] **Notifications.** Add `@mantine/notifications` for save, import, and sync results. Remove inline success and error text where a notification is more clear.
+- [x] **Charts.** Keep ECharts. Make the chart colors follow the Mantine theme and the color scheme.
+- [x] **Clean up.** Delete `styles.css` and the unused components. Check that each page works in light mode and in dark mode.
 
 ## Milestone 3: Usability
 
@@ -67,18 +67,18 @@ The goal is the same features on Mantine components, with no new features. At th
 
 ## Milestone 7: Developer setup
 
-- [ ] **Setup script.** One command installs packages, makes `.env` from `.env.example`, makes the secrets, and seeds the demo data.
-- [ ] **Fewer environment variables.** Derive `CRON_SECRET` and `APP_SECRET_KEY` from one root secret. Then a deploy needs only `APP_PASSWORD` and that secret. Keep the current `APP_SECRET_KEY` value working, so that stored bank tokens stay readable.
-- [ ] **Dockerfile and Docker Compose.** Build the Next.js app with `output: "standalone"`. Compose runs the app and a Postgres container.
+- [x] **Setup script.** One command installs packages, makes `.env` from `.env.example`, makes the secrets, and seeds the demo data.
+- [x] **Fewer environment variables.** Derive `CRON_SECRET` and `APP_SECRET_KEY` from one root secret. Then a deploy needs only `APP_PASSWORD` and that secret. Keep the current `APP_SECRET_KEY` value working, so that stored bank tokens stay readable.
+- [x] **Dockerfile and Docker Compose.** Build the Next.js app with `output: "standalone"`. Compose runs the app and a Postgres container.
 
 ## Milestone 8: Backend performance and reliability
 
-- [ ] **Indexes.** Now only `transactions(date)` and `transactions(parent_id)` exist. Use `EXPLAIN` on the report queries, and then add indexes for the common filters, for example `(account_id, date)` and `(category_id, date)`.
-- [ ] **Transactions and isolation.** Sync and import already use `BEGIN`. Make sure that Plaid sync cannot run 2 times at once for the same connection. A Postgres advisory lock does this.
-- [ ] **Idempotency keys.** Add them to CSV import and the bank connect flow, so that a retry does not add rows 2 times.
-- [ ] **Connection pooling.** The pool has `max: 3`. On Vercel, use the Neon pooled connection URL.
+- [x] **Indexes.** Now only `transactions(date)` and `transactions(parent_id)` exist. Use `EXPLAIN` on the report queries, and then add indexes for the common filters, for example `(account_id, date)` and `(category_id, date)`.
+- [x] **Transactions and isolation.** Sync and import already use `BEGIN`. Make sure that Plaid sync cannot run 2 times at once for the same connection. A Postgres advisory lock does this.
+- [x] **Idempotency keys.** Add them to CSV import and the bank connect flow, so that a retry does not add rows 2 times.
+- [x] **Connection pooling.** The pool has `max: 3`. On Vercel, use the Neon pooled connection URL.
 - [ ] **Pagination.** Use cursor pagination on the transaction list.
-- [ ] **Timeouts and retries.** Set timeouts on Plaid and Anthropic calls. Retry with backoff only on errors that are safe to retry.
+- [x] **Timeouts and retries.** Set timeouts on Plaid and Anthropic calls. Retry with backoff only on errors that are safe to retry.
 
 ## Backlog
 
