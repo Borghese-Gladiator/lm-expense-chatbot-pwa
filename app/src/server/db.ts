@@ -97,6 +97,14 @@ CREATE TABLE IF NOT EXISTS saved_queries (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS idempotency_keys (
+    route TEXT NOT NULL,
+    key TEXT NOT NULL,
+    response JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (route, key)
+);
+
 CREATE OR REPLACE VIEW reportable AS
 SELECT
     t.id,
