@@ -39,9 +39,20 @@ const TxnSearch = z.object({
   unreviewed: z.boolean().default(false),
   sort: z.enum(["date", "amount", "merchant", "category", "account"]).default("date"),
   desc: z.boolean().default(true),
-  offset: z.number().int().min(0).default(0),
+  cursor: z.string().nullish(),
   limit: z.number().int().min(1).max(1000).default(100),
 });
+
+const encodeCursor = (row: Record<string, unknown>, sort: string) =>
+  Buffer.from(JSON.stringify([row[sort], row.id])).toString("base64url");
+
+function decodeCursor(cursor: string): [unknown, number] {
+  try {
+    const v = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
+    if (Array.isArray(v) && v.length === 2 && Number.isInteger(v[1])) return [v[0], v[1]];
+  } catch {}
+  throw new BadRequest("invalid cursor");
+}
 const TxnType = z.enum(["income", "expense", "transfer", "adjustment"]);
 const TxnIn = z.object({
   account_id: z.number().int(),
@@ -228,12 +239,23 @@ const ROUTES: [string, string, Handler][] = [
     async ({ db }, { body }) => {
       const b = TxnSearch.parse(body ?? {});
       const [where, params] = txnWhere(b);
-      const order = `${b.sort} ${b.desc ? "DESC" : "ASC"}, id DESC`;
-      const [items, total] = await Promise.all([
-        db.query(`SELECT * FROM reportable WHERE ${where} ORDER BY ${order} LIMIT ${b.limit} OFFSET ${b.offset}`, params),
+      const dir = b.desc ? "DESC" : "ASC";
+      let page = where;
+      const pageParams = [...params];
+      if (b.cursor) {
+        page = `(${where}) AND (${b.sort}, id) ${b.desc ? "<" : ">"} (?, ?)`;
+        pageParams.push(...decodeCursor(b.cursor));
+      }
+      const [rows, total] = await Promise.all([
+        db.query<Record<string, unknown>>(
+          `SELECT * FROM reportable WHERE ${page} ORDER BY ${b.sort} ${dir}, id ${dir} LIMIT ${b.limit + 1}`,
+          pageParams,
+        ),
         one<{ n: number; s: number | null }>(db, `SELECT COUNT(*) AS n, SUM(amount) AS s FROM reportable WHERE ${where}`, params),
       ]);
-      return { items, total: total!.n, sum: total!.s ?? 0 };
+      const items = rows.slice(0, b.limit);
+      const next_cursor = rows.length > b.limit ? encodeCursor(items[items.length - 1], b.sort) : null;
+      return { items, next_cursor, total: total!.n, sum: total!.s ?? 0 };
     },
   ],
   [
