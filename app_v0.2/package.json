@@ -1,0 +1,36 @@
+{
+  "name": "lm-expense-chatbot-pwa",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "_comment": "Serwist does not support Turbopack yet, therefore, --webpack is required",
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@mlc-ai/web-llm": "^0.2.79",
+    "@radix-ui/react-progress": "^1.1.8",
+    "@radix-ui/react-toast": "^1.2.15",
+    "@serwist/next": "^9.2.1",
+    "@tanstack/react-table": "^8.21.3",
+    "ai": "^5.0.90",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.548.0",
+    "nanoid": "^5.1.6",
+    "next": "16.0.0",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "react-is": "^19.2.0",
+    "recharts": "^3.4.1",
+    "tailwind-merge": "^3.3.1"
+  },
+  "devDependencies": {
+    "@serwist/build": "^9.2.1",
+    "@tailwindcss/postcss": "^4",
+    "serwist": "^9.2.1",
+    "tailwindcss": "^4"
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+}

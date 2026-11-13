@@ -2,17 +2,17 @@
 
 ## setup
 ```sh
-cd spend_lens && uv sync --extra dev && npm ci --prefix frontend
+npm ci --prefix app
 ```
 
 ## start
 ```sh
-cd spend_lens && npm run build --prefix frontend && DB="$(mktemp -d)/demo.duckdb" && PYTHONPATH=. uv run python scripts/seed_demo.py "$DB" && DUCKDB_PATH="$DB" ANTHROPIC_API_KEY= PLAID_CLIENT_ID= exec uv run uvicorn app.main:app --port {port}
+cd app && npm run build && export PGLITE_DIR="$(mktemp -d)/pglite" ANTHROPIC_API_KEY= PLAID_CLIENT_ID= APP_PASSWORD= && npm run seed && exec npx next start -p {port}
 ```
 url: http://127.0.0.1:{port}
 ready: /api/health
 
 ## test
 ```sh
-PYTHONPATH=spend_lens uv run --project spend_lens --extra dev python -m pytest -q -p no:cacheprovider --junitxml={report} {tests}
+cd app && npx vitest run --reporter=junit --outputFile={report} {tests}
 ```

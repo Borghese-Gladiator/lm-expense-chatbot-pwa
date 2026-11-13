@@ -1,342 +1,89 @@
-# LM Expense Tracker
+# Spend Lens (SL)
 
-An AI-powered personal finance assistant that analyzes spending patterns from Lunch Money. Runs entirely in your browser using WebLLM for complete privacy - no data leaves your device.
+A standalone, analytics-first personal finance app. It has no budgets. It focuses on transactions you can explain:
+every number opens the transactions behind it.
 
-## Features
+- **Data in:** Plaid bank sync (manual and a daily cron), CSV import (including the Lunch Money export), and manual entry. The app does not depend on another finance app.
+- **Analysis:** Overview, the Explore query builder (measure × metric × up to 2 dimensions × filters × period comparison), drill-down, one-off exclusion, and saved analyses.
+- **Organization:** search, inline and bulk edits, categories with groups and kinds, tags, notes, a reviewed flag, and CSV export.
+- **Ask (optional):** a question in plain language becomes a structured query that you can check and change. The model gets names only (categories, accounts, tags, merchants), never transactions.
 
-- **On-Device AI**: WebLLM-powered chatbot with WebGPU acceleration
-- **Function Calling**: LLM automatically calls tools to retrieve and analyze financial data
-- **Lunch Money Integration**: Connect to your Lunch Money account for real transaction analysis
-- **Transaction Caching**: Smart caching minimizes API calls and improves performance
-- **Chat History**: Persistent conversation history with localStorage
-- **PWA Support**: Install as a Progressive Web App on any device
-- **Dark Mode**: Responsive design with light/dark theme support
+## Stack
 
-## Screenshots
-
-Web
-![alt text](screenshot_web.png)
-
-Mobile
-![alt text](screenshot_mobile.png)
-
-### Usage
-
-Monthly Overview:
-"Summarize my spending for the last month, broken down by category, and highlight the top 3 areas where I spent the most."
-
-Trends Over Time:
-"Compare my monthly spending over the last 6 months and tell me which categories are increasing or decreasing."
-
-Budget Analysis:
-"Based on my current spending patterns, which categories should I cut back on to stay within a $3,000 monthly budget?"
-
-Merchant Insights:
-"Identify the merchants where I spend the most and suggest ways to reduce costs at those places."
-
-Anomaly Detection:
-"Find any unusual or one-time expenses in my transactions over the last 3 months and explain why they stand out."
-
-
-
-
-## Tech Stack
-
-- **[Next.js 16](https://nextjs.org)** - React framework with App Router
-- **[WebLLM](https://webllm.mlc.ai/)** - In-browser LLM inference using WebGPU
-- **[AI SDK](https://ai-sdk.dev/docs/introduction)** - Unified API for LLM interactions and tool calling
-- **[shadcn/ui](https://ui.shadcn.com)** - High-quality React components
-- **[Tailwind CSS](https://tailwindcss.com)** - Utility-first CSS framework
-- **[Radix UI](https://radix-ui.com)** - Accessible component primitives
-- **[Serwist](https://serwist.pages.dev/)** - Service worker for PWA functionality
-
-## Quick Start
-
-### Prerequisites
-
-- Node.js 18+ and Yarn
-- A modern browser with WebGPU support (Chrome 113+, Edge 113+)
-- (Optional) Lunch Money API key from [my.lunchmoney.app/developers](https://my.lunchmoney.app/developers)
-
-### Installation
-
-1. **Clone and install dependencies**
-   ```bash
-   cd app
-   yarn install
-   ```
-
-2. **Configure Lunch Money API (Optional)**
-   ```bash
-   # Create environment file
-   cp .env.example .env.local
-
-   # Add your API key to .env.local
-   NEXT_PUBLIC_LUNCH_MONEY_API_KEY=your_api_key_here
-   ```
-
-   > **Note:** Without an API key, the app uses mock data for demonstration purposes.
-
-3. **Start development server**
-   ```bash
-   yarn dev
-   ```
-
-   Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-4. **First run**
-   - The AI model (~4.5GB for Hermes 2 Pro Mistral 7B) will download automatically
-   - This only happens once - the model is cached in your browser
-   - Download time: 5-15 minutes depending on your connection
-
-### Available Models
-
-The app supports Hermes models with function calling capabilities:
-
-| Model | Size | Best For |
-|-------|------|----------|
-| **Hermes 2 Pro Mistral 7B** (default) | ~4.5GB | Balanced performance and size |
-| Hermes 2 Pro Llama 3 8B | ~5GB | Better accuracy |
-| Hermes 3 Llama 3.1 8B | ~5GB | Latest model, best results |
-
-Switch models from the UI or by updating the default in `src/app/page.js`.
-
-## Development Guide
-
-### Project Structure
+One Next.js app. It deploys to Vercel with no settings change, because the Vercel project builds `app/`.
 
 ```
-app/
-├── src/
-│   ├── app/                    # Next.js App Router
-│   │   ├── page.js            # Main chat interface
-│   │   ├── layout.js          # Root layout with Toaster
-│   │   └── globals.css        # Global styles & Tailwind theme
-│   ├── components/
-│   │   ├── ChatSidebar.jsx    # Collapsible chat history sidebar
-│   │   └── ui/                # shadcn/ui components
-│   ├── hooks/
-│   │   ├── useWebLLM.js       # WebLLM model management & chat
-│   │   ├── useChatHistory.js  # Chat persistence with localStorage
-│   │   ├── useLocalStorage.js # Generic localStorage hook
-│   │   └── use-toast.js       # Toast notification system
-│   └── lib/
-│       ├── tools.js           # LLM tool definitions & implementations
-│       ├── lunchMoneyApi.js   # Lunch Money API client with caching
-│       └── utils.js           # Utility functions
-└── public/
-    └── favicon/               # PWA icons and manifest
+src/app/            Next.js shell: layout, page, and one catch-all API route
+src/proxy.ts        password check on every request (see Security)
+src/server/
+  db.ts             schema + `reportable` view; Postgres (DATABASE_URL) or PGlite (local)
+  analytics.ts      AnalyticsQuery -> parameterized SQL, comparison, drill-down
+  csv.ts            header aliases, debit/credit columns, idempotent dedupe
+  plaid.ts          Link, token exchange, cursor /transactions/sync
+  crypto.ts         AES-256-GCM encryption for Plaid access tokens
+  ask.ts            question -> AnalyticsQuery (structured output)
+  api.ts            all API routes and the daily sync
+src/web/            React client: Overview, Explore, Transactions, Accounts, Settings
+tests/              analytics semantics, CSV import, Plaid sync, API, auth
+scripts/seed-demo.ts
 ```
 
-### Key Components
-
-#### WebLLM Integration (`useWebLLM.js`)
-- Model lifecycle management (load, unload)
-- Streaming chat completions with function calling
-- Progress tracking for model downloads
-- Error handling with graceful degradation
-
-#### Function Calling (`tools.js`)
-Available tools for the LLM:
-- `get_transactions` - Fetch transactions by date range
-- `sum_by_category` - Spending breakdown by category
-- `month_over_month` - Monthly spending trends
-- `top_merchants` - Highest spending merchants
-- `monthly_cashflow` - Income vs expenses analysis
-- `compare_yoy` - Year-over-year comparison
-- `category_health` - Budget vs actual spending
-- `get_categories` - List all categories
-- `get_tags` - List all tags
-
-#### Transaction Caching (`lunchMoneyApi.js`)
-```javascript
-// Example: Automatic caching
-await getTransactions('2025-01-01', '2025-01-31'); // API call
-await getTransactions('2025-01-01', '2025-01-31'); // Cache hit!
-```
-
-Cache key format: `{startDate}_{endDate}`
-
-### Build & Deploy
+## Run on your machine
 
 ```bash
-# Production build
-yarn build
-
-# Start production server
-yarn start
-
-# Deploy to Vercel
-vercel deploy
+npm install
+npm run seed     # optional: 2 years of fake data
+npm run dev      # http://localhost:3000
 ```
 
-The app is PWA-ready and will work offline after initial load.
+With no `DATABASE_URL`, the app keeps its data in PGlite (Postgres in the Node process) in `.data/pglite`.
+Run `npm run dev` or `npm run seed` one at a time, because PGlite opens the folder for one process only.
 
-## How It Was Built
+## Deploy to Vercel
 
-### Phase 1: Project Setup & Foundation
-1. **Initialize Next.js App**
-   ```bash
-   npx create-next-app app
-   ```
+1. In the Vercel project, open **Storage** and add a **Neon** Postgres database. This sets `DATABASE_URL`.
+2. In **Settings → Environment Variables**, set `APP_PASSWORD`, `CRON_SECRET`, and `APP_SECRET_KEY`. Add the Plaid and Anthropic keys if you use them.
+3. Deploy. The tables are made on the first request.
 
-2. **Set up PWA with Serwist**
-   ```bash
-   yarn add @serwist/next
-   yarn add -D @serwist/build
-   ```
-   - Configured service worker in `next.config.mjs`
-   - Generated PWA icons with [favicon generator](https://realfavicongenerator.net/)
-   - Deployed to Vercel to validate PWA functionality
+`vercel.json` runs `/api/cron/sync` one time each day (the Hobby plan limit). Vercel sends `CRON_SECRET` with the request.
 
-3. **Configure Tailwind CSS v4**
-   - Added `@theme` directive for custom color registration
-   - Set up light/dark mode with CSS variables
-   - Configured proper color inheritance
+## Configuration
 
-### Phase 2: UI Components & Chat Interface
-1. **Install shadcn/ui Components**
-   ```bash
-   npx shadcn@latest init
-   npx shadcn@latest add button progress toast
-   ```
-   - Manually added AI-specific components (prompt-input, loader, reasoning, sources)
-   - Created custom toast variants (default, destructive, info)
+| Variable | Use | Default |
+|---|---|---|
+| `DATABASE_URL` | Postgres connection | empty = PGlite |
+| `PGLITE_DIR` | PGlite data folder | `.data/pglite` |
+| `APP_PASSWORD` | Shared password. Required on Vercel. | — |
+| `CRON_SECRET` | Lets Vercel Cron call `/api/cron/sync` | — |
+| `APP_SECRET_KEY` | Encrypts bank tokens (16+ characters). Do not change it after you connect a bank. | — |
+| `PLAID_CLIENT_ID`, `PLAID_SECRET` | Plaid keys | — |
+| `PLAID_ENV` | `sandbox` or `production` | `sandbox` |
+| `ANTHROPIC_API_KEY` | Turns on Ask | — |
+| `MODEL` | Model for Ask | `claude-opus-5-5` |
+| `CURRENCY` | Reporting currency | `USD` |
 
-2. **Build Chat Interface**
-   - Implemented collapsible sidebar (60px → 280px)
-   - Added chat history with localStorage persistence
-   - Created responsive layout with flex positioning
-   - Added auto-scroll to bottom for new messages
+## Security
 
-3. **Design System**
-   - Fully opaque navbar (not transparent)
-   - Centered top toast notifications
-   - Smooth width transitions for sidebar
-   - Uses `bg-muted` for sidebar visual distinction
+- The browser asks for a password (HTTP Basic). Any user name works. The password is `APP_PASSWORD`.
+- On Vercel, if `APP_PASSWORD` is not set, every request gets a 503. The bank data never becomes public by mistake.
+- Without `APP_PASSWORD` on your machine, the app is open, so that local development is simple.
+- `/api/cron/sync` accepts only `Authorization: Bearer $CRON_SECRET`. The app password does not open it.
+- All users share one data set. Give the password only to people who can see all of it.
 
-### Phase 3: WebLLM Integration
-1. **Install WebLLM**
-   ```bash
-   yarn add @mlc-ai/web-llm ai
-   ```
+To move from Lunch Money, export your transactions as CSV in Lunch Money. Then import the file on the Accounts page. The import creates accounts, categories, and groups by name. A second import of the same file adds nothing.
 
-2. **Create useWebLLM Hook**
-   - Model loading with progress tracking
-   - Streaming chat completions
-   - Function calling support
-   - Automatic model caching in browser
+## How totals work
 
-3. **Model Selection**
-   - Started with Qwen 2.5 0.5B (fastest, but no function calling)
-   - **Switched to Hermes models** (only ones supporting function calling in WebLLM)
-   - Default: Hermes 2 Pro Mistral 7B (smallest with tools support)
+- A negative amount is money out. **Spending** is expenses with the sign flipped, so a refund reduces spending.
+- **Transfers** and **adjustments** never count toward spending, income, or net. A category's kind sets the type, and a type that you set on a transaction wins.
+- **Pending** transactions and categories marked "exclude" are left out unless you include them.
+- When a transaction is split, only the child rows count, so the parent is not counted two times.
+- **Previous period** for a full calendar month (or a run of full months) is the same number of calendar months before it. For any other range, it is a range of the same length that ends the day before.
 
-4. **User Experience**
-   - Info toast on first model download
-   - Progress bar showing download percentage
-   - Model selector UI in navbar
-
-### Phase 4: Function Calling & API Integration
-1. **Create Tool Definitions**
-   - Based on Python POC in `/poc_v0.1/src/tools.py`
-   - OpenAI-format function schemas
-   - 9 financial analysis tools
-   - Mock data generators for testing
-
-2. **Lunch Money API Client**
-   ```bash
-   # Read API documentation
-   # Implemented in lunchMoneyApi.js
-   ```
-   - GET `/v1/transactions` endpoint
-   - Bearer token authentication
-   - Date-range based caching
-   - Cache statistics and utilities
-
-3. **Smart Fallback System**
-   - Environment flag: `USE_MOCK_DATA = !process.env.NEXT_PUBLIC_LUNCH_MONEY_API_KEY`
-   - Automatic fallback to mock data on errors
-   - Console logging for debugging
-
-4. **Update Chat Flow**
-   - System message defines LLM as "Personal Finance specialist"
-   - LLM receives tools array in chat completion
-   - Tool execution via `onToolCall` callback
-   - Multi-turn conversation: user → tool call → tool result → final response
-
-### Phase 5: Polish & Optimization
-1. **Commit Organization**
-   - Used git filter-branch to rename commits
-   - Semantic versioning (feat, fix, chore, style)
-   - Modular commits by feature area
-
-2. **Documentation**
-   - Created `.env.example` for API key setup
-   - Updated README with comprehensive guide
-   - Added inline code documentation
-
-3. **Testing**
-   - Verified function calling with Hermes models
-   - Tested caching behavior
-   - Validated mock data fallback
-
-## Environment Variables
-
-Create `.env.local` for local development:
+## Checks
 
 ```bash
-# Lunch Money API Key (optional)
-# Get from: https://my.lunchmoney.app/developers
-NEXT_PUBLIC_LUNCH_MONEY_API_KEY=your_api_key_here
+npm test             # vitest, in-memory PGlite
+npm run check-types
+npm run build        # the Vercel build
 ```
-
-## Troubleshooting
-
-### WebGPU Not Available
-- Ensure you're using Chrome 113+ or Edge 113+
-- Enable WebGPU in browser flags: `chrome://flags/#enable-unsafe-webgpu`
-
-### Model Download Issues
-- Check browser console for errors
-- Ensure stable internet connection
-- Clear IndexedDB cache: DevTools → Application → Storage → Clear site data
-
-### API Connection Failed
-- Verify API key is correct in `.env.local`
-- Check Lunch Money API status
-- Review browser console for CORS errors
-- App will automatically use mock data as fallback
-
-### shadcn Component Issues
-We encountered issues with the official shadcn AI chatbot block:
-```bash
-npx shadcn@latest add https://www.shadcn.io/registry/ai-chatbot.json
-# Error: Package not available
-```
-**Solution:** Manually created AI components based on shadcn patterns.
-
-## PWA Resources
-
-- ~~`next-pwa`~~ - Deprecated
-- ~~`@ducanh2912/next-pwa`~~ - Also deprecated
-- **`@serwist/next`** - Current recommendation ([docs](https://serwist.pages.dev/docs/next))
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes with semantic commits
-4. Test thoroughly (especially function calling)
-5. Submit a pull request
-
-## License
-
-[Your License Here]
-
-## Acknowledgments
-
-- Python POC implementation in `/poc_v0.1/src/tools.py`
-- shadcn/ui for excellent component library
-- WebLLM team for browser-based LLM inference
-- Lunch Money for comprehensive financial API
