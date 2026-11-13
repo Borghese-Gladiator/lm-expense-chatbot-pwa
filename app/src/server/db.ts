@@ -1,3 +1,5 @@
+import { mkdir } from "node:fs/promises";
+
 import type { Settings } from "./config";
 
 export type Row = Record<string, unknown>;
@@ -138,6 +140,7 @@ export async function scalar<T = unknown>(db: Db, sql: string, params?: unknown[
 
 async function pgliteDb(dataDir?: string): Promise<Db> {
   const { PGlite, types } = await import("@electric-sql/pglite");
+  if (dataDir) await mkdir(dataDir, { recursive: true });
   const pg = await PGlite.create({
     dataDir,
     parsers: { [types.DATE]: (v: string) => v, [types.NUMERIC]: Number, [types.INT8]: Number },
