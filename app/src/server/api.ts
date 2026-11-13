@@ -450,6 +450,28 @@ const ROUTES: [string, string, Handler][] = [
       }
     },
   ],
+  [
+    "POST",
+    "plaid/items/:id/link-token",
+    async (ctx, { params }) => {
+      let token: string | null;
+      try {
+        token = await plaid.createUpdateLinkToken(ctx.db, ctx.plaid, id(params[0]));
+      } catch (e) {
+        plaidFailure(e);
+      }
+      if (token === null) throw new HttpError(404, "connection not found");
+      return { link_token: token };
+    },
+  ],
+  [
+    "POST",
+    "plaid/items/:id/reconnected",
+    async ({ db }, { params }) => {
+      if (!(await plaid.markReconnected(db, id(params[0])))) throw new HttpError(404, "connection not found");
+      return { ok: true };
+    },
+  ],
   ["GET", "cron/sync", async (ctx) => syncAll(ctx)],
 ];
 

@@ -96,6 +96,20 @@ export function Accounts() {
       });
     });
 
+  const reconnect = (id: number) =>
+    run("Opening Plaid", async () => {
+      const { link_token } = await api<{ link_token: string }>(`/plaid/items/${id}/link-token`, {});
+      if (link_token !== "mock-link-token") {
+        await loadPlaid();
+        const ok = await new Promise<boolean>((resolve) =>
+          window.Plaid!.create({ token: link_token, onSuccess: () => resolve(true), onExit: () => resolve(false) }).open(),
+        );
+        if (!ok) return "Plaid closed.";
+      }
+      await api(`/plaid/items/${id}/reconnected`, {});
+      return "Reconnected.";
+    });
+
   const syncItem = (id: number) =>
     run("Syncing", async () => {
       const r = await api<{ added: number; modified: number; removed: number }>(`/plaid/items/${id}/sync`, {});
@@ -128,7 +142,12 @@ export function Accounts() {
                     Last sync: {it.last_synced_at ? new Date(it.last_synced_at).toLocaleString() : "Never"}
                   </Table.Td>
                   <Table.Td ta="right">
-                    <Button size="xs" variant="default" disabled={busy} onClick={() => syncItem(it.id)}>Sync now</Button>
+                    <Group gap="xs" justify="flex-end" wrap="nowrap">
+                      {it.status === "reconnect" && (
+                        <Button size="xs" disabled={busy} onClick={() => reconnect(it.id)}>Reconnect</Button>
+                      )}
+                      <Button size="xs" variant="default" disabled={busy} onClick={() => syncItem(it.id)}>Sync now</Button>
+                    </Group>
                   </Table.Td>
                 </Table.Tr>
               ))}
