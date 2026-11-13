@@ -167,20 +167,21 @@ async function pgliteDb(dataDir?: string): Promise<Db> {
   return wrap(pg);
 }
 
-async function postgresDb(url: string): Promise<Db> {
+async function postgresDb(directUrl: string, pooledUrl: string): Promise<Db> {
   const { default: pgLib } = await import("pg");
   pgLib.types.setTypeParser(1082, (v: string) => v);
   pgLib.types.setTypeParser(1700, (v: string) => Number(v));
   pgLib.types.setTypeParser(20, (v: string) => Number(v));
-  const pool = new pgLib.Pool({ connectionString: url, max: 3 });
-  const client = await pool.connect();
+  const client = new pgLib.Client({ connectionString: directUrl });
+  await client.connect();
   try {
     await client.query("SELECT pg_advisory_lock($1)", [SCHEMA_LOCK]);
     await client.query(SCHEMA);
     await client.query("SELECT pg_advisory_unlock($1)", [SCHEMA_LOCK]);
   } finally {
-    client.release();
+    await client.end();
   }
+  const pool = new pgLib.Pool({ connectionString: pooledUrl || directUrl, max: 3 });
   type Queryable = { query: (sql: string, params: unknown[]) => Promise<{ rows: unknown[] }> };
   const run = async <T>(c: Queryable, sql: string, params: unknown[] = []) =>
     (await c.query(numbered(sql), params)).rows as T[];
@@ -209,9 +210,12 @@ async function postgresDb(url: string): Promise<Db> {
   };
 }
 
-export function openDb(settings: Pick<Settings, "databaseUrl" | "pgliteDir">, memory = false): Promise<Db> {
+export function openDb(
+  settings: Pick<Settings, "databaseUrl" | "pgliteDir"> & Partial<Pick<Settings, "databaseUrlPooled">>,
+  memory = false,
+): Promise<Db> {
   if (memory) return pgliteDb();
-  if (settings.databaseUrl) return postgresDb(settings.databaseUrl);
+  if (settings.databaseUrl) return postgresDb(settings.databaseUrl, settings.databaseUrlPooled ?? "");
   return pgliteDb(settings.pgliteDir);
 }
 
