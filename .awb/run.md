@@ -14,5 +14,5 @@ ready: /api/health
 
 ## test
 ```sh
-app/node_modules/.bin/vitest run --root . --config app/vitest.config.ts --reporter=junit --outputFile={report} {tests}
+app/node_modules/.bin/vitest run --root . --config app/vitest.config.ts --no-cache --no-fsModuleCache --reporter=junit --outputFile={report} {tests}
 ```

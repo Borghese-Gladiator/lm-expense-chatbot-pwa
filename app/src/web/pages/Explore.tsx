@@ -1,3 +1,7 @@
+import {
+  Alert, Button, Card, Checkbox, Group, Modal, MultiSelect, NumberInput, SegmentedControl, Select, Stack, Table, Text, TextInput, Title,
+} from "@mantine/core";
+import { DatePickerInput } from "@mantine/dates";
 import { useEffect, useMemo, useState } from "react";
 
 import type { AnalyticsQuery, ChartKind, Compare, Dimension, Measure, Metric, QueryRow } from "../api";
@@ -5,7 +9,7 @@ import { api, DIM_LABEL, MEASURE_LABEL, METRIC_LABEL, runQuery, TIME_DIMS } from
 import { Chart, resolveKind } from "../Chart";
 import type { Preset } from "../format";
 import { dimValue, metricValue, money, pct, PRESETS, presetRange, signedMoney } from "../format";
-import { Status, useApp, useAsync } from "../shared";
+import { LoadState, useApp, useAsync } from "../shared";
 import { ChangeTable } from "./Overview";
 
 interface Saved {
@@ -24,6 +28,9 @@ const DEFAULT: AnalyticsQuery = {
   limit: 100,
 };
 
+const NONE = "__none";
+const NUM = { fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" } as const;
+
 const fromHash = (): AnalyticsQuery => {
   const m = location.hash.match(/[?&]q=([^&]+)/);
   if (!m) return DEFAULT;
@@ -34,36 +41,25 @@ const fromHash = (): AnalyticsQuery => {
   }
 };
 
+const opts = <T extends string>(labels: Record<T, string>, keys = Object.keys(labels) as T[]) =>
+  keys.map((k) => ({ value: k, label: labels[k] }));
+
 function Multi<T extends string | number>({
   label, options, value, onChange,
 }: { label: string; options: { value: T; label: string }[]; value: T[]; onChange: (v: T[]) => void }) {
-  const [open, setOpen] = useState(false);
-  const [q, setQ] = useState("");
-  const shown = options.filter((o) => o.label.toLowerCase().includes(q.toLowerCase())).slice(0, 200);
+  const byKey = new Map(options.map((o) => [String(o.value), o.value]));
   return (
-    <div className="multi">
-      <button className={`chip ${value.length ? "on" : ""}`} onClick={() => setOpen(!open)} aria-expanded={open}>
-        {label}{value.length ? ` · ${value.length}` : ""} ▾
-      </button>
-      {open && (
-        <div className="popover" onMouseLeave={() => setOpen(false)}>
-          <input autoFocus placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} />
-          <div className="options">
-            {shown.map((o) => (
-              <label key={String(o.value)} className="check">
-                <input
-                  type="checkbox"
-                  checked={value.includes(o.value)}
-                  onChange={() => onChange(value.includes(o.value) ? value.filter((x) => x !== o.value) : [...value, o.value])}
-                />
-                {o.label}
-              </label>
-            ))}
-          </div>
-          {value.length > 0 && <button className="small ghost" onClick={() => onChange([])}>Clear</button>}
-        </div>
-      )}
-    </div>
+    <MultiSelect
+      aria-label={label}
+      placeholder={value.length ? undefined : label}
+      data={options.map((o) => ({ value: String(o.value), label: o.label }))}
+      value={value.map(String)}
+      onChange={(v) => onChange(v.map((k) => byKey.get(k)!).filter((x) => x !== undefined))}
+      searchable
+      clearable
+      limit={200}
+      w={200}
+    />
   );
 }
 
@@ -74,6 +70,7 @@ export function Explore() {
   const [view, setView] = useState<"chart" | "table">("chart");
   const [saved, setSaved] = useState<Saved[]>([]);
   const [savedId, setSavedId] = useState<number | null>(null);
+  const [saveName, setSaveName] = useState<string | null>(null);
   const [question, setQuestion] = useState("");
   const [askState, setAskState] = useState<{ busy?: boolean; error?: string; note?: string }>({});
 
@@ -134,16 +131,18 @@ export function Explore() {
     });
   };
 
-  const save = async () => {
-    const current = saved.find((s) => s.id === savedId);
-    const name = prompt("Name this analysis", current?.name ?? "");
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = saveName?.trim();
     if (!name) return;
+    const current = saved.find((s) => s.id === savedId);
     if (current && name === current.name) {
       await api(`/saved-queries/${current.id}`, { name, query: q }, "PUT");
     } else {
       const res = await api<{ id: number }>("/saved-queries", { name, query: q });
       setSavedId(res.id);
     }
+    setSaveName(null);
     loadSaved();
   };
 
@@ -166,155 +165,199 @@ export function Explore() {
     () => (meta?.categories ?? []).map((c) => ({ value: c.id, label: c.group_name ? `${c.group_name} › ${c.name}` : c.name })),
     [meta],
   );
+  const dimOptions = opts(DIM_LABEL);
 
   return (
-    <div className="page">
-      <div className="toolbar">
-        <h1>Explore</h1>
-        <div className="row">
-          <select aria-label="Saved analyses" value={savedId ?? ""} onChange={(e) => {
-            const s = saved.find((x) => x.id === Number(e.target.value));
-            setSavedId(s?.id ?? null);
-            if (s) { setQ({ ...DEFAULT, ...s.query }); setPreset("custom"); }
-          }}>
-            <option value="">Saved analyses…</option>
-            {saved.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-          <button onClick={save}>Save</button>
+    <Stack p="md" gap="md">
+      <Group justify="space-between" wrap="wrap">
+        <Title order={1} size="h2">Explore</Title>
+        <Group gap="sm">
+          <Select
+            aria-label="Saved analyses"
+            placeholder="Saved analyses…"
+            clearable
+            data={saved.map((s) => ({ value: String(s.id), label: s.name }))}
+            value={savedId == null ? null : String(savedId)}
+            onChange={(v) => {
+              const s = saved.find((x) => x.id === Number(v));
+              setSavedId(s?.id ?? null);
+              if (s) { setQ({ ...DEFAULT, ...s.query }); setPreset("custom"); }
+            }}
+            w={200}
+          />
+          <Button onClick={() => setSaveName(saved.find((s) => s.id === savedId)?.name ?? "")}>Save</Button>
           {savedId && (
-            <button className="ghost" onClick={async () => {
+            <Button variant="subtle" color="red" onClick={async () => {
               if (!confirm("Delete this saved analysis?")) return;
               await api(`/saved-queries/${savedId}`, undefined, "DELETE");
               setSavedId(null);
               loadSaved();
-            }}>Delete</button>
+            }}>Delete</Button>
           )}
-          <button className="ghost" onClick={() => { setQ(DEFAULT); setSavedId(null); }}>Reset</button>
-        </div>
-      </div>
+          <Button variant="default" onClick={() => { setQ(DEFAULT); setSavedId(null); }}>Reset</Button>
+        </Group>
+      </Group>
+
+      <Modal opened={saveName !== null} onClose={() => setSaveName(null)} title="Save analysis">
+        <form onSubmit={save}>
+          <Stack gap="sm">
+            <TextInput label="Name" data-autofocus required value={saveName ?? ""} onChange={(e) => setSaveName(e.currentTarget.value)} />
+            <Group justify="flex-end">
+              <Button variant="default" onClick={() => setSaveName(null)}>Cancel</Button>
+              <Button type="submit" disabled={!saveName?.trim()}>Save</Button>
+            </Group>
+          </Stack>
+        </form>
+      </Modal>
 
       {meta?.ask_configured && (
-        <form className="card ask" onSubmit={(e) => { e.preventDefault(); if (question.trim().length > 2) ask(); }}>
-          <input
-            aria-label="Ask a question"
-            placeholder="Ask: why did restaurant spending go up last month?"
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-          />
-          <button disabled={askState.busy}>{askState.busy ? "Thinking…" : "Build query"}</button>
-          {askState.note && <p className="muted">{askState.note} Check the controls below before you rely on it.</p>}
-          {askState.error && <p className="error">{askState.error}</p>}
-        </form>
+        <Card withBorder component="form" padding="md" onSubmit={(e: React.FormEvent) => { e.preventDefault(); if (question.trim().length > 2) ask(); }}>
+          <Group gap="sm">
+            <TextInput
+              aria-label="Ask a question"
+              placeholder="Ask: why did restaurant spending go up last month?"
+              value={question}
+              onChange={(e) => setQuestion(e.currentTarget.value)}
+              style={{ flex: 1 }}
+            />
+            <Button type="submit" loading={askState.busy}>Build query</Button>
+          </Group>
+          {askState.note && <Text c="dimmed" size="sm" mt="sm">{askState.note} Check the controls below before you rely on it.</Text>}
+          {askState.error && <Alert color="red" mt="sm">{askState.error}</Alert>}
+        </Card>
       )}
 
-      <section className="card builder">
-        <div className="row wrap">
-          <label>Measure
-            <select value={q.measure} onChange={(e) => set({ measure: e.target.value as Measure })}>
-              {(Object.keys(MEASURE_LABEL) as Measure[]).map((m) => <option key={m} value={m}>{MEASURE_LABEL[m]}</option>)}
-            </select>
-          </label>
-          <label>Metric
-            <select value={q.metric} onChange={(e) => set({ metric: e.target.value as Metric })}>
-              {metricOptions.map((m) => <option key={m} value={m}>{METRIC_LABEL[m]}</option>)}
-            </select>
-          </label>
-          <label>Group by
-            <select value={q.dimensions[0] ?? ""} onChange={(e) => setDim(0, e.target.value as Dimension)}>
-              <option value="">Nothing (one total)</option>
-              {(Object.keys(DIM_LABEL) as Dimension[]).map((d) => <option key={d} value={d}>{DIM_LABEL[d]}</option>)}
-            </select>
-          </label>
-          {q.dimensions.length > 0 && (
-            <label>Then by
-              <select value={q.dimensions[1] ?? ""} onChange={(e) => setDim(1, e.target.value as Dimension)}>
-                <option value="">—</option>
-                {(Object.keys(DIM_LABEL) as Dimension[]).filter((d) => d !== q.dimensions[0]).map((d) => (
-                  <option key={d} value={d}>{DIM_LABEL[d]}</option>
-                ))}
-              </select>
-            </label>
-          )}
-          <label>Period
-            <select value={preset} onChange={(e) => {
-              const p = e.target.value as Preset;
-              setPreset(p);
-              if (p !== "custom") setF(presetRange(p));
-            }}>
-              {PRESETS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-            </select>
-          </label>
-          <label>From<input type="date" value={q.filters.start ?? ""} onChange={(e) => { setPreset("custom"); setF({ start: e.target.value || null }); }} /></label>
-          <label>To<input type="date" value={q.filters.end ?? ""} onChange={(e) => { setPreset("custom"); setF({ end: e.target.value || null }); }} /></label>
-          <label>Compare to
-            <select
-              value={q.compare}
+      <Card withBorder component="section" padding="md">
+        <Stack gap="sm">
+          <Group gap="sm" align="flex-end" wrap="wrap">
+            <Select label="Measure" allowDeselect={false} data={opts(MEASURE_LABEL)} value={q.measure} onChange={(v) => v && set({ measure: v as Measure })} w={150} />
+            <Select label="Metric" allowDeselect={false} data={opts(METRIC_LABEL, metricOptions)} value={q.metric} onChange={(v) => v && set({ metric: v as Metric })} w={170} />
+            <Select
+              label="Group by"
+              allowDeselect={false}
+              data={[{ value: NONE, label: "Nothing (one total)" }, ...dimOptions]}
+              value={q.dimensions[0] ?? NONE}
+              onChange={(v) => setDim(0, !v || v === NONE ? "" : (v as Dimension))}
+              w={170}
+            />
+            {q.dimensions.length > 0 && (
+              <Select
+                label="Then by"
+                allowDeselect={false}
+                data={[{ value: NONE, label: "—" }, ...dimOptions.filter((d) => d.value !== q.dimensions[0])]}
+                value={q.dimensions[1] ?? NONE}
+                onChange={(v) => setDim(1, !v || v === NONE ? "" : (v as Dimension))}
+                w={170}
+              />
+            )}
+            <Select
+              label="Period"
+              allowDeselect={false}
+              data={PRESETS.map((p) => ({ value: p.id, label: p.label }))}
+              value={preset}
+              onChange={(v) => {
+                const p = (v ?? "custom") as Preset;
+                setPreset(p);
+                if (p !== "custom") setF(presetRange(p));
+              }}
+              w={160}
+            />
+            <DatePickerInput
+              type="range"
+              label="Date range"
+              placeholder="Any date"
+              clearable
+              valueFormat="YYYY-MM-DD"
+              value={[q.filters.start ?? null, q.filters.end ?? null]}
+              onChange={([s, e]) => { setPreset("custom"); setF({ start: s, end: e }); }}
+              w={240}
+            />
+            <Select
+              label="Compare to"
+              allowDeselect={false}
               disabled={!compareAllowed && q.compare === "none"}
               title={compareAllowed ? "" : "Set a date range and remove time grouping to compare"}
-              onChange={(e) => {
-                const c = e.target.value as Compare;
+              data={[
+                { value: "none", label: "Nothing" },
+                { value: "previous_period", label: "Previous period" },
+                { value: "same_period_last_year", label: "Same period last year" },
+                { value: "custom", label: "Custom period" },
+              ]}
+              value={q.compare}
+              onChange={(v) => {
+                const c = (v ?? "none") as Compare;
                 set({ compare: c, metric: c !== "none" && ["pct_of_total", "cumulative"].includes(q.metric) ? "total" : q.metric });
               }}
-            >
-              <option value="none">Nothing</option>
-              <option value="previous_period">Previous period</option>
-              <option value="same_period_last_year">Same period last year</option>
-              <option value="custom">Custom period</option>
-            </select>
-          </label>
-          {q.compare === "custom" && (
-            <>
-              <label>Compare from<input type="date" value={q.compare_start ?? ""} onChange={(e) => set({ compare_start: e.target.value })} /></label>
-              <label>Compare to<input type="date" value={q.compare_end ?? ""} onChange={(e) => set({ compare_end: e.target.value })} /></label>
-            </>
-          )}
-        </div>
-        <div className="row wrap filters">
-          <Multi label="Accounts" options={(meta?.accounts ?? []).map((a) => ({ value: a.id, label: a.name }))} value={q.filters.account_ids ?? []} onChange={(v) => setF({ account_ids: v })} />
-          <Multi label="Categories" options={catOptions} value={q.filters.category_ids ?? []} onChange={(v) => setF({ category_ids: v })} />
-          <Multi label="Groups" options={(meta?.groups ?? []).map((g) => ({ value: g, label: g }))} value={q.filters.category_groups ?? []} onChange={(v) => setF({ category_groups: v })} />
-          <Multi label="Merchants" options={(merchants.data ?? []).map((m) => ({ value: m, label: m }))} value={q.filters.merchants ?? []} onChange={(v) => setF({ merchants: v })} />
-          <Multi label="Tags" options={(meta?.tags ?? []).map((t) => ({ value: t, label: t }))} value={q.filters.tags ?? []} onChange={(v) => setF({ tags: v })} />
-          <input className="small-input" type="number" min={0} placeholder="Min $" aria-label="Minimum amount" value={q.filters.amount_min ?? ""} onChange={(e) => setF({ amount_min: e.target.value ? Number(e.target.value) : null })} />
-          <input className="small-input" type="number" min={0} placeholder="Max $" aria-label="Maximum amount" value={q.filters.amount_max ?? ""} onChange={(e) => setF({ amount_max: e.target.value ? Number(e.target.value) : null })} />
-          <input placeholder="Search payee or notes" aria-label="Search" value={q.filters.search ?? ""} onChange={(e) => setF({ search: e.target.value || null })} />
-          <label className="check"><input type="checkbox" checked={q.filters.include_pending ?? false} onChange={(e) => setF({ include_pending: e.target.checked })} />Include pending</label>
-          {(q.filters.exclude_ids?.length ?? 0) > 0 && (
-            <button className="chip on" onClick={() => setF({ exclude_ids: [] })} title="Bring excluded transactions back">
-              {q.filters.exclude_ids!.length} excluded ✕
-            </button>
-          )}
-        </div>
-      </section>
+              w={190}
+            />
+            {q.compare === "custom" && (
+              <DatePickerInput
+                type="range"
+                label="Compare range"
+                placeholder="Pick dates"
+                valueFormat="YYYY-MM-DD"
+                value={[q.compare_start ?? null, q.compare_end ?? null]}
+                onChange={([s, e]) => set({ compare_start: s ?? undefined, compare_end: e ?? undefined })}
+                w={240}
+              />
+            )}
+          </Group>
+          <Group gap="sm" wrap="wrap" align="center">
+            <Multi label="Accounts" options={(meta?.accounts ?? []).map((a) => ({ value: a.id, label: a.name }))} value={q.filters.account_ids ?? []} onChange={(v) => setF({ account_ids: v })} />
+            <Multi label="Categories" options={catOptions} value={q.filters.category_ids ?? []} onChange={(v) => setF({ category_ids: v })} />
+            <Multi label="Groups" options={(meta?.groups ?? []).map((g) => ({ value: g, label: g }))} value={q.filters.category_groups ?? []} onChange={(v) => setF({ category_groups: v })} />
+            <Multi label="Merchants" options={(merchants.data ?? []).map((m) => ({ value: m, label: m }))} value={q.filters.merchants ?? []} onChange={(v) => setF({ merchants: v })} />
+            <Multi label="Tags" options={(meta?.tags ?? []).map((t) => ({ value: t, label: t }))} value={q.filters.tags ?? []} onChange={(v) => setF({ tags: v })} />
+            <NumberInput min={0} placeholder="Min $" aria-label="Minimum amount" value={q.filters.amount_min ?? ""} onChange={(v) => setF({ amount_min: v === "" ? null : Number(v) })} w={100} />
+            <NumberInput min={0} placeholder="Max $" aria-label="Maximum amount" value={q.filters.amount_max ?? ""} onChange={(v) => setF({ amount_max: v === "" ? null : Number(v) })} w={100} />
+            <TextInput placeholder="Search payee or notes" aria-label="Search" value={q.filters.search ?? ""} onChange={(e) => setF({ search: e.currentTarget.value || null })} w={200} />
+            <Checkbox label="Include pending" checked={q.filters.include_pending ?? false} onChange={(e) => setF({ include_pending: e.currentTarget.checked })} />
+            {(q.filters.exclude_ids?.length ?? 0) > 0 && (
+              <Button size="xs" variant="light" onClick={() => setF({ exclude_ids: [] })} title="Bring excluded transactions back">
+                {q.filters.exclude_ids!.length} excluded ✕
+              </Button>
+            )}
+          </Group>
+        </Stack>
+      </Card>
 
-      <section className="card">
-        <div className="toolbar small">
+      <Card withBorder component="section" padding="md">
+        <Group justify="space-between" wrap="wrap" mb="sm">
           <Summary rows={data?.rows} totals={data?.totals} metric={q.metric} compareRange={data?.compare_range} />
           {q.compare === "none" && q.dimensions.length > 0 && (
-            <div className="row">
-              <div className="segmented" role="tablist">
-                <button className={view === "chart" ? "on" : ""} onClick={() => setView("chart")} disabled={!chartable}>Chart</button>
-                <button className={view === "table" ? "on" : ""} onClick={() => setView("table")}>Table</button>
-              </div>
+            <Group gap="sm">
+              <SegmentedControl
+                aria-label="View"
+                value={view}
+                onChange={(v) => setView(v as "chart" | "table")}
+                data={[{ value: "chart", label: "Chart", disabled: !chartable }, { value: "table", label: "Table" }]}
+              />
               {view === "chart" && (
-                <select aria-label="Chart type" value={q.chart ?? "auto"} onChange={(e) => set({ chart: e.target.value as ChartKind })}>
-                  <option value="auto">Auto chart</option>
-                  <option value="bar">Bar</option>
-                  <option value="line">Line</option>
-                  <option value="area">Area</option>
-                  <option value="stacked_bar">Stacked bar</option>
-                  {q.dimensions.length === 1 && <option value="treemap">Treemap</option>}
-                </select>
+                <Select
+                  aria-label="Chart type"
+                  allowDeselect={false}
+                  data={[
+                    { value: "auto", label: "Auto chart" },
+                    { value: "bar", label: "Bar" },
+                    { value: "line", label: "Line" },
+                    { value: "area", label: "Area" },
+                    { value: "stacked_bar", label: "Stacked bar" },
+                    ...(q.dimensions.length === 1 ? [{ value: "treemap", label: "Treemap" }] : []),
+                  ]}
+                  value={q.chart ?? "auto"}
+                  onChange={(v) => v && set({ chart: v as ChartKind })}
+                  w={150}
+                />
               )}
-            </div>
+            </Group>
           )}
-        </div>
-        <Status loading={loading && !data} error={error} empty={data?.rows.length === 0} />
+        </Group>
+        <LoadState loading={loading && !data} error={error} empty={data?.rows.length === 0} />
         {data && data.rows.length > 0 && (
           q.compare !== "none" ? (
             <>
               <ChangeTable result={data} label={q.dimensions[0] ? DIM_LABEL[q.dimensions[0]] : "Total"} onPick={(v) => drill(q.dimensions[0] ? { [q.dimensions[0]]: v } : {})} />
-              <p className="muted small">Click a row to see the transactions in the current period. Exclude one-off purchases from the drawer to recalculate.</p>
+              <Text c="dimmed" size="sm" mt="sm">Click a row to see the transactions in the current period. Exclude one-off purchases from the drawer to recalculate.</Text>
             </>
           ) : view === "chart" && chartable ? (
             <Chart rows={data.rows} dimensions={q.dimensions} metric={q.metric} kind={q.chart ?? "auto"} height={380} onPick={drill} />
@@ -322,8 +365,8 @@ export function Explore() {
             <ResultTable rows={data.rows} dims={q.dimensions} metric={q.metric} onPick={drill} />
           )
         )}
-      </section>
-    </div>
+      </Card>
+    </Stack>
   );
 }
 
@@ -332,17 +375,17 @@ function Summary({ rows, totals, metric, compareRange }: { rows?: QueryRow[]; to
   if (totals) {
     return (
       <div>
-        <strong>{money(totals.current)}</strong> vs <strong>{money(totals.previous)}</strong>{" "}
-        <span className={totals.diff! > 0 ? "up" : "down"}>{signedMoney(totals.diff!)} ({pct(totals.pct)})</span>
-        <div className="muted small">Comparison period {compareRange?.start} → {compareRange?.end}</div>
+        <Text span fw={600}>{money(totals.current)}</Text> vs <Text span fw={600}>{money(totals.previous)}</Text>{" "}
+        <Text span c={totals.diff! > 0 ? "red" : "teal"}>{signedMoney(totals.diff!)} ({pct(totals.pct)})</Text>
+        <Text c="dimmed" size="sm">Comparison period {compareRange?.start} → {compareRange?.end}</Text>
       </div>
     );
   }
   const n = rows.reduce((a, r) => a + r.n, 0);
   return (
     <div>
-      {rows.length === 1 && rows[0].d0 === undefined ? <strong>{metricValue(metric, rows[0].value)}</strong> : <strong>{rows.length} groups</strong>}
-      <span className="muted"> · {n.toLocaleString()} transactions</span>
+      <Text span fw={600}>{rows.length === 1 && rows[0].d0 === undefined ? metricValue(metric, rows[0].value) : `${rows.length} groups`}</Text>
+      <Text span c="dimmed"> · {n.toLocaleString()} transactions</Text>
     </div>
   );
 }
@@ -355,46 +398,46 @@ function ResultTable({ rows, dims, metric, onPick }: { rows: QueryRow[]; dims: D
     if (TIME_DIMS.includes(d0)) rowKeys.sort();
     const cell = new Map(rows.map((r) => [`${r.d0}|${r.d1}`, r.value]));
     return (
-      <div className="table-wrap">
-        <table className="pivot">
-          <thead>
-            <tr><th>{DIM_LABEL[d0]} \ {DIM_LABEL[d1]}</th>{cols.map((c) => <th key={c} className="right">{dimValue(d1, c)}</th>)}</tr>
-          </thead>
-          <tbody>
+      <Table.ScrollContainer minWidth={480}>
+        <Table fz="sm" withColumnBorders>
+          <Table.Thead>
+            <Table.Tr><Table.Th>{DIM_LABEL[d0]} \ {DIM_LABEL[d1]}</Table.Th>{cols.map((c) => <Table.Th key={c} ta="right">{dimValue(d1, c)}</Table.Th>)}</Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
             {rowKeys.map((rk) => (
-              <tr key={rk}>
-                <th>{dimValue(d0, rk)}</th>
+              <Table.Tr key={rk}>
+                <Table.Th>{dimValue(d0, rk)}</Table.Th>
                 {cols.map((c) => {
                   const v = cell.get(`${rk}|${c}`);
                   return (
-                    <td key={c} className="right num clickable" onClick={() => v != null && onPick({ [d0]: rk, [d1]: c })}>
+                    <Table.Td key={c} ta="right" style={{ ...NUM, cursor: v == null ? undefined : "pointer" }} onClick={() => v != null && onPick({ [d0]: rk, [d1]: c })}>
                       {v == null ? "" : metricValue(metric, v)}
-                    </td>
+                    </Table.Td>
                   );
                 })}
-              </tr>
+              </Table.Tr>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </Table.Tbody>
+        </Table>
+      </Table.ScrollContainer>
     );
   }
   return (
-    <div className="table-wrap">
-      <table>
-        <thead>
-          <tr><th>{d0 ? DIM_LABEL[d0] : ""}</th><th className="right">{METRIC_LABEL[metric]}</th><th className="right">Transactions</th></tr>
-        </thead>
-        <tbody>
+    <Table.ScrollContainer minWidth={400}>
+      <Table fz="sm" highlightOnHover>
+        <Table.Thead>
+          <Table.Tr><Table.Th>{d0 ? DIM_LABEL[d0] : ""}</Table.Th><Table.Th ta="right">{METRIC_LABEL[metric]}</Table.Th><Table.Th ta="right">Transactions</Table.Th></Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
           {rows.map((r, i) => (
-            <tr key={r.d0 ?? i} className="clickable" onClick={() => onPick(d0 ? { [d0]: r.d0 } : {})}>
-              <td>{dimValue(d0, r.d0)}</td>
-              <td className="right num">{metricValue(metric, r.value)}</td>
-              <td className="right num">{r.n}</td>
-            </tr>
+            <Table.Tr key={r.d0 ?? i} style={{ cursor: "pointer" }} onClick={() => onPick(d0 ? { [d0]: r.d0 } : {})}>
+              <Table.Td>{dimValue(d0, r.d0)}</Table.Td>
+              <Table.Td ta="right" style={NUM}>{metricValue(metric, r.value)}</Table.Td>
+              <Table.Td ta="right" style={NUM}>{r.n}</Table.Td>
+            </Table.Tr>
           ))}
-        </tbody>
-      </table>
-    </div>
+        </Table.Tbody>
+      </Table>
+    </Table.ScrollContainer>
   );
 }

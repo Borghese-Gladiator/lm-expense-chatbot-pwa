@@ -1,3 +1,4 @@
+import { Alert, Badge, Button, Center, Checkbox, Drawer, Group, Loader, Table, Text, Title } from "@mantine/core";
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 
 import type { Drill, Meta, Txn } from "./api";
@@ -35,20 +36,20 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[]) {
   return { data, error, loading };
 }
 
-export function Status({
+export function LoadState({
   loading, error, empty, emptyText = "No transactions match these filters.",
 }: { loading?: boolean; error?: string | null; empty?: boolean; emptyText?: string }) {
-  if (error) return <div className="state error" role="alert">{error}</div>;
-  if (loading) return <div className="state">Loading…</div>;
-  if (empty) return <div className="state">{emptyText}</div>;
+  if (error) return <Alert color="red" role="alert" my="md">{error}</Alert>;
+  if (loading) return <Center p="xl"><Loader size="sm" aria-label="Loading" /></Center>;
+  if (empty) return <Text c="dimmed" ta="center" p="xl">{emptyText}</Text>;
   return null;
 }
 
 export function Amount({ v }: { v: number }) {
-  return <span className={`num ${v > 0 ? "pos" : ""}`}>{money2(v)}</span>;
+  return <Text span inherit c={v > 0 ? "teal" : undefined} style={{ whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{money2(v)}</Text>;
 }
 
-export function TxnTable({
+export function TransactionTable({
   items,
   onRowClick,
   selected,
@@ -62,53 +63,54 @@ export function TxnTable({
   extra?: (t: Txn) => React.ReactNode;
 }) {
   return (
-    <div className="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            {onToggle && <th aria-label="Select" />}
-            <th>Date</th>
-            <th>Merchant</th>
-            <th>Category</th>
-            <th>Account</th>
-            <th>Tags</th>
-            <th className="right">Amount</th>
-            {extra && <th />}
-          </tr>
-        </thead>
-        <tbody>
+    <Table.ScrollContainer minWidth={600}>
+      <Table highlightOnHover={!!onRowClick} fz="sm">
+        <Table.Thead>
+          <Table.Tr>
+            {onToggle && <Table.Th aria-label="Select" />}
+            <Table.Th>Date</Table.Th>
+            <Table.Th>Merchant</Table.Th>
+            <Table.Th>Category</Table.Th>
+            <Table.Th>Account</Table.Th>
+            <Table.Th>Tags</Table.Th>
+            <Table.Th ta="right">Amount</Table.Th>
+            {extra && <Table.Th />}
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
           {items.map((t) => (
-            <tr key={t.id} onClick={() => onRowClick?.(t)} className={onRowClick ? "clickable" : ""}>
+            <Table.Tr key={t.id} onClick={() => onRowClick?.(t)} style={onRowClick ? { cursor: "pointer" } : undefined}>
               {onToggle && (
-                <td onClick={(e) => e.stopPropagation()}>
-                  <input
-                    type="checkbox"
+                <Table.Td onClick={(e) => e.stopPropagation()}>
+                  <Checkbox
                     aria-label={`Select ${t.merchant}`}
                     checked={selected?.has(t.id) ?? false}
                     onChange={() => onToggle(t.id)}
                   />
-                </td>
+                </Table.Td>
               )}
-              <td className="nowrap">{t.date}</td>
-              <td>
+              <Table.Td style={{ whiteSpace: "nowrap" }}>{t.date}</Table.Td>
+              <Table.Td>
                 {t.merchant}
-                {t.is_pending && <span className="badge">pending</span>}
-                {t.txn_type === "transfer" && <span className="badge">transfer</span>}
-              </td>
-              <td>{t.category}</td>
-              <td className="muted">{t.account}</td>
-              <td>{t.tags.map((g) => <span key={g} className="tag">{g}</span>)}</td>
-              <td className="right"><Amount v={t.amount} /></td>
-              {extra && <td onClick={(e) => e.stopPropagation()}>{extra(t)}</td>}
-            </tr>
+                {t.is_pending && <Badge variant="outline" color="gray" size="xs" ml={6}>pending</Badge>}
+                {t.txn_type === "transfer" && <Badge variant="outline" color="gray" size="xs" ml={6}>transfer</Badge>}
+              </Table.Td>
+              <Table.Td>{t.category}</Table.Td>
+              <Table.Td c="dimmed">{t.account}</Table.Td>
+              <Table.Td>
+                <Group gap={4}>{t.tags.map((g) => <Badge key={g} variant="light" size="xs">{g}</Badge>)}</Group>
+              </Table.Td>
+              <Table.Td ta="right"><Amount v={t.amount} /></Table.Td>
+              {extra && <Table.Td onClick={(e) => e.stopPropagation()}>{extra(t)}</Table.Td>}
+            </Table.Tr>
           ))}
-        </tbody>
-      </table>
-    </div>
+        </Table.Tbody>
+      </Table>
+    </Table.ScrollContainer>
   );
 }
 
-export function DrillDrawer({ drill, onClose }: { drill: Drill; onClose: () => void }) {
+export function DrilldownDrawer({ drill, onClose }: { drill: Drill; onClose: () => void }) {
   const { openTxn, version } = useApp();
   const [query, setQuery] = useState(drill.query);
   useEffect(() => setQuery(drill.query), [drill]);
@@ -127,41 +129,41 @@ export function DrillDrawer({ drill, onClose }: { drill: Drill; onClose: () => v
         setQuery((q) => ({ ...q, filters: { ...q.filters, exclude_ids: [...(q.filters.exclude_ids ?? []), id] } }));
       }
     : undefined;
-  useEffect(() => {
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", esc);
-    return () => window.removeEventListener("keydown", esc);
-  }, [onClose]);
   return (
-    <aside className="drawer" role="dialog" aria-label={drill.title}>
-      <header>
+    <Drawer
+      opened
+      onClose={onClose}
+      position="right"
+      size="xl"
+      closeButtonProps={{ "aria-label": "Close" }}
+      title={
         <div>
-          <h2>{drill.title}</h2>
+          <Title order={2} size="h4">{drill.title}</Title>
           {data && (
-            <p className="muted">
+            <Text c="dimmed" size="sm">
               {data.count} transactions · {money2(data.total)}
-            </p>
+            </Text>
           )}
         </div>
-        <button className="ghost" onClick={onClose} aria-label="Close">✕</button>
-      </header>
-      <Status loading={loading} error={error} empty={data?.count === 0} />
+      }
+    >
+      <LoadState loading={loading} error={error} empty={data?.count === 0} />
       {data && data.count > 0 && (
-        <TxnTable
+        <TransactionTable
           items={data.transactions}
           onRowClick={(t) => openTxn(t.id)}
           extra={
             onExclude
               ? (t) => (
-                  <button className="small" title="Leave this transaction out of the analysis" onClick={() => onExclude(t.id)}>
+                  <Button size="compact-xs" variant="default" title="Leave this transaction out of the analysis" onClick={() => onExclude(t.id)}>
                     Exclude
-                  </button>
+                  </Button>
                 )
               : undefined
           }
         />
       )}
-    </aside>
+    </Drawer>
   );
 }
 
