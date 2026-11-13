@@ -413,7 +413,7 @@ const ROUTES: [string, string, Handler][] = [
   [
     "GET",
     "plaid/items",
-    async ({ db }) => db.query("SELECT id, item_id, institution, status, error, created_at FROM plaid_items"),
+    async ({ db }) => db.query("SELECT id, item_id, institution, status, error, created_at, last_synced_at FROM plaid_items ORDER BY id"),
   ],
   [
     "POST",

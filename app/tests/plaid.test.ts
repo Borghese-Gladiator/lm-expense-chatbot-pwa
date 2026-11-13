@@ -99,8 +99,12 @@ it("runs the full sync lifecycle", async () => {
 it("marks reconnect on a failed sync and keeps the data", async () => {
   const fake = new FakePlaid([{ added: [txn("t1", 5)], next_cursor: "c1", has_more: false }, 400]);
   const [client, item] = await connect(fake);
+  expect(await scalar(db, "SELECT last_synced_at FROM plaid_items")).toBeNull();
   await plaid.syncItem(db, client, item);
+  const synced = await scalar(db, "SELECT last_synced_at FROM plaid_items");
+  expect(synced).toBeInstanceOf(Date);
   await expect(plaid.syncItem(db, client, item)).rejects.toBeInstanceOf(plaid.PlaidError);
+  expect(await scalar(db, "SELECT last_synced_at FROM plaid_items")).toEqual(synced);
   expect(await scalar(db, "SELECT status FROM plaid_items")).toBe("reconnect");
   expect(await scalar(db, "SELECT cursor FROM plaid_items")).toBe("c1");
   expect(await scalar(db, "SELECT COUNT(*) FROM transactions")).toBe(1);

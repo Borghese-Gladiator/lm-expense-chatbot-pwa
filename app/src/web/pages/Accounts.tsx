@@ -11,6 +11,7 @@ interface PlaidItem {
   institution: string | null;
   status: string;
   error: string | null;
+  last_synced_at: string | null;
 }
 interface SyncRun {
   id: number;
@@ -122,6 +123,9 @@ export function Accounts() {
                   <Table.Td>{it.institution ?? "Bank"}</Table.Td>
                   <Table.Td c={it.status === "ok" ? "dimmed" : "red"}>
                     {it.status === "ok" ? "Connected" : it.status === "reconnect" ? "Sign-in needed: connect again" : it.error}
+                  </Table.Td>
+                  <Table.Td c="dimmed" style={NUM}>
+                    Last sync: {it.last_synced_at ? new Date(it.last_synced_at).toLocaleString() : "Never"}
                   </Table.Td>
                   <Table.Td ta="right">
                     <Button size="xs" variant="default" disabled={busy} onClick={() => syncItem(it.id)}>Sync now</Button>

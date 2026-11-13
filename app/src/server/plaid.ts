@@ -307,7 +307,7 @@ async function runSync(
     counts = await db.tx(async (t) => {
       await upsertAccounts(t, itemPk, item.institution, data.accounts.length ? data.accounts : accounts);
       const c = await apply(t, data);
-      await t.query("UPDATE plaid_items SET cursor = ?, status = 'ok', error = NULL WHERE id = ?", [data.cursor, itemPk]);
+      await t.query("UPDATE plaid_items SET cursor = ?, status = 'ok', error = NULL, last_synced_at = now() WHERE id = ?", [data.cursor, itemPk]);
       return c;
     });
   } catch (e) {
