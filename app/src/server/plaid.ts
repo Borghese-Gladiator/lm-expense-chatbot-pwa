@@ -10,6 +10,7 @@ import { categoryIdFor, one, scalar, type Db, type Row } from "./db";
 
 const HOSTS = { sandbox: "https://sandbox.plaid.com", production: "https://production.plaid.com" };
 const MAX_RESTARTS = 3;
+export const SYNC_RUNNING = "SYNC_ALREADY_RUNNING";
 
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -17,16 +18,30 @@ export class PlaidError extends Error {
   constructor(
     public code: string,
     message: string,
+    public status = 0,
   ) {
     super(`${code}: ${message}`);
   }
 }
 
+export type PlaidClientOptions = { timeoutMs?: number; retries?: number; retryDelayMs?: number };
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 export class PlaidClient {
+  readonly timeoutMs: number;
+  readonly retries: number;
+  readonly retryDelayMs: number;
+
   constructor(
     readonly settings: Settings,
     private fetchFn: typeof fetch = fetch,
-  ) {}
+    opts: PlaidClientOptions = {},
+  ) {
+    this.timeoutMs = opts.timeoutMs ?? 30_000;
+    this.retries = opts.retries ?? 3;
+    this.retryDelayMs = opts.retryDelayMs ?? 500;
+  }
 
   get configured(): boolean {
     return Boolean(this.settings.plaidClientId && this.settings.plaidSecret);
@@ -34,22 +49,59 @@ export class PlaidClient {
 
   async post(path: string, body: Json): Promise<Json> {
     if (!this.configured) throw new PlaidError("NOT_CONFIGURED", "set PLAID_CLIENT_ID and PLAID_SECRET");
-    let resp: Response;
-    try {
-      resp = await this.fetchFn(`${HOSTS[this.settings.plaidEnv]}${path}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ client_id: this.settings.plaidClientId, secret: this.settings.plaidSecret, ...body }),
-        signal: AbortSignal.timeout(30_000),
-      });
-    } catch {
-      throw new PlaidError("NETWORK_ERROR", `could not reach Plaid (${path})`);
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await this.once(path, body);
+      } catch (e) {
+        const retryable = e instanceof PlaidError && (e.code === "NETWORK_ERROR" || e.status >= 500 || e.status === 429);
+        if (!retryable || attempt >= this.retries) throw e;
+        await sleep(this.retryDelayMs * 2 ** attempt);
+      }
     }
-    const text = await resp.text();
-    const data: Json = text ? JSON.parse(text) : {};
-    if (resp.status >= 400)
-      throw new PlaidError(String(data.error_code ?? resp.status), String(data.error_message ?? "Plaid request failed"));
-    return data;
+  }
+
+  private async once(path: string, body: Json): Promise<Json> {
+    const ctrl = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        ctrl.abort();
+        reject(new PlaidError("TIMEOUT", `Plaid did not answer within ${this.timeoutMs} ms (${path})`));
+      }, this.timeoutMs);
+    });
+    const request = async () => {
+      let resp: Response;
+      try {
+        resp = await this.fetchFn(`${HOSTS[this.settings.plaidEnv]}${path}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ client_id: this.settings.plaidClientId, secret: this.settings.plaidSecret, ...body }),
+          signal: ctrl.signal,
+        });
+      } catch {
+        if (ctrl.signal.aborted) return timeout;
+        throw new PlaidError("NETWORK_ERROR", `could not reach Plaid (${path})`);
+      }
+      const text = await resp.text();
+      let data: Json = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        if (resp.status < 400) throw new PlaidError("BAD_RESPONSE", `Plaid sent invalid JSON (${path})`);
+      }
+      if (resp.status >= 400)
+        throw new PlaidError(
+          String(data.error_code ?? resp.status),
+          String(data.error_message ?? "Plaid request failed"),
+          resp.status,
+        );
+      return data;
+    };
+    try {
+      return await Promise.race([request(), timeout]);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 }
 
@@ -221,10 +273,29 @@ async function apply(db: Db, data: Awaited<ReturnType<typeof fetchAll>>): Promis
 export async function syncItem(db: Db, client: PlaidClient, itemPk: number) {
   const item = await one<{ access_token_enc: string; cursor: string | null; institution: string | null }>(
     db,
-    "SELECT * FROM plaid_items WHERE id = ?",
+    `UPDATE plaid_items SET sync_started_at = now()
+     WHERE id = ? AND (sync_started_at IS NULL OR sync_started_at < now() - interval '10 minutes')
+     RETURNING *`,
     [itemPk],
   );
-  if (!item) throw new PlaidError("NOT_FOUND", "no such connection");
+  if (!item) {
+    if (await scalar(db, "SELECT 1 FROM plaid_items WHERE id = ?", [itemPk]))
+      throw new PlaidError(SYNC_RUNNING, "a sync is already running for this connection");
+    throw new PlaidError("NOT_FOUND", "no such connection");
+  }
+  try {
+    return await runSync(db, client, itemPk, item);
+  } finally {
+    await db.query("UPDATE plaid_items SET sync_started_at = NULL WHERE id = ?", [itemPk]);
+  }
+}
+
+async function runSync(
+  db: Db,
+  client: PlaidClient,
+  itemPk: number,
+  item: { access_token_enc: string; cursor: string | null; institution: string | null },
+) {
   const runId = await scalar(db, "INSERT INTO sync_runs (source, plaid_item_id) VALUES ('plaid', ?) RETURNING id", [
     itemPk,
   ]);

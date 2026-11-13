@@ -110,7 +110,7 @@ async function patchTxns(db: Db, ids: number[], body: z.infer<typeof TxnPatch>) 
 }
 
 function plaidFailure(e: unknown): never {
-  if (e instanceof plaid.PlaidError) throw new HttpError(502, e.message);
+  if (e instanceof plaid.PlaidError) throw new HttpError(e.code === plaid.SYNC_RUNNING ? 409 : 502, e.message);
   if (e instanceof Error && e.message.startsWith("APP_SECRET_KEY")) throw new HttpError(502, e.message);
   throw e;
 }
@@ -405,7 +405,7 @@ const ROUTES: [string, string, Handler][] = [
     "data/delete-all",
     async ({ db }) => {
       await db.query(
-        "TRUNCATE transactions, accounts, categories, plaid_items, sync_runs, saved_queries RESTART IDENTITY",
+        "TRUNCATE transactions, accounts, categories, plaid_items, sync_runs, saved_queries, idempotency_keys RESTART IDENTITY",
       );
       return { ok: true };
     },
@@ -453,13 +453,45 @@ const ROUTES: [string, string, Handler][] = [
   ["GET", "cron/sync", async (ctx) => syncAll(ctx)],
 ];
 
-function match(method: string, path: string[]): [Handler, string[]] | undefined {
+const IDEMPOTENT = new Set(["import/csv", "plaid/exchange"]);
+
+function match(method: string, path: string[]): [Handler, string[], string] | undefined {
   for (const [m, pattern, handler] of ROUTES) {
     if (m !== method) continue;
     const parts = pattern.split("/");
     if (parts.length !== path.length) continue;
     const params: string[] = [];
-    if (parts.every((p, i) => (p === ":id" ? params.push(path[i]) > 0 : p === path[i]))) return [handler, params];
+    if (parts.every((p, i) => (p === ":id" ? params.push(path[i]) > 0 : p === path[i])))
+      return [handler, params, pattern];
+  }
+}
+
+async function once(db: Db, route: string, key: string, run: () => Promise<unknown>): Promise<unknown> {
+  const claimed = await scalar(
+    db,
+    "INSERT INTO idempotency_keys (route, key) VALUES (?, ?) ON CONFLICT DO NOTHING RETURNING key",
+    [route, key],
+  );
+  if (claimed === undefined) {
+    const saved = await one<{ response: unknown }>(
+      db,
+      "SELECT response FROM idempotency_keys WHERE route = ? AND key = ?",
+      [route, key],
+    );
+    if (saved?.response == null) throw new HttpError(409, "a request with this Idempotency-Key is in progress");
+    return saved.response;
+  }
+  try {
+    const out = await run();
+    await db.query("UPDATE idempotency_keys SET response = ? WHERE route = ? AND key = ?", [
+      JSON.stringify(out),
+      route,
+      key,
+    ]);
+    return out;
+  } catch (e) {
+    await db.query("DELETE FROM idempotency_keys WHERE route = ? AND key = ?", [route, key]);
+    throw e;
   }
 }
 
@@ -468,11 +500,13 @@ const json = (detail: string, status: number) => Response.json({ detail }, { sta
 export async function handle(ctx: Ctx, req: Request, path: string[]): Promise<Response> {
   const hit = match(req.method, path);
   if (!hit) return json("not found", 404);
-  const [handler, params] = hit;
+  const [handler, params, pattern] = hit;
   try {
     const text = req.method === "GET" || req.method === "DELETE" ? "" : await req.text();
     const body = text ? JSON.parse(text) : undefined;
-    const out = await handler(ctx, { params, body, req });
+    const key = req.headers.get("Idempotency-Key");
+    const run = () => handler(ctx, { params, body, req });
+    const out = key && IDEMPOTENT.has(pattern) ? await once(ctx.db, pattern, key, run) : await run();
     return out instanceof Response ? out : Response.json(out);
   } catch (e) {
     if (e instanceof HttpError) return json(e.message, e.status);

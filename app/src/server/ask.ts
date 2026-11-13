@@ -44,7 +44,7 @@ async function catalog(db: Db): Promise<string> {
 }
 
 export async function ask(db: Db, settings: Settings, question: string): Promise<AskResult> {
-  const client = new Anthropic({ apiKey: settings.anthropicApiKey });
+  const client = new Anthropic({ apiKey: settings.anthropicApiKey, timeout: 60_000, maxRetries: 2 });
   const response = await client.messages.parse({
     model: settings.model,
     max_tokens: 16000,

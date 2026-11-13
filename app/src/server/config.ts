@@ -1,5 +1,6 @@
 export interface Settings {
   databaseUrl: string;
+  databaseUrlPooled: string;
   pgliteDir: string;
   currency: string;
   appSecretKey: string;
@@ -13,6 +14,7 @@ export interface Settings {
 export function loadSettings(env: NodeJS.ProcessEnv = process.env): Settings {
   return {
     databaseUrl: env.DATABASE_URL ?? "",
+    databaseUrlPooled: env.DATABASE_URL_POOLED ?? "",
     pgliteDir: env.PGLITE_DIR ?? ".data/pglite",
     currency: env.CURRENCY ?? "USD",
     appSecretKey: env.APP_SECRET_KEY ?? "",
