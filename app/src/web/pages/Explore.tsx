@@ -259,6 +259,9 @@ export function Explore() {
                 const p = (v ?? "custom") as Preset;
                 setPreset(p);
                 if (p !== "custom") setF(presetRange(p));
+                if (p === "ytd" && !q.dimensions.some((d) => TIME_DIMS.includes(d))) {
+                  set({ compare: "same_period_last_year", metric: ["pct_of_total", "cumulative"].includes(q.metric) ? "total" : q.metric });
+                }
               }}
               w={160}
             />
