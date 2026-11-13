@@ -1,3 +1,5 @@
+import { AppShell, Burger, Group, NavLink } from "@mantine/core";
+import { useDisclosure } from "@mantine/hooks";
 import { useCallback, useEffect, useState } from "react";
 
 import type { Drill } from "./api";
@@ -30,6 +32,7 @@ export default function App() {
   const [drill, setDrill] = useState<Drill | null>(null);
   const [txnId, setTxnId] = useState<number | null>(null);
   const [version, setVersion] = useState(0);
+  const [opened, { toggle, close }] = useDisclosure();
   const bump = useCallback(() => setVersion((v) => v + 1), []);
   const closeDrill = useCallback(() => setDrill(null), []);
 
@@ -56,27 +59,39 @@ export default function App() {
 
   return (
     <Ctx.Provider value={{ meta, reloadMeta, openDrill: setDrill, openTxn: setTxnId, version, bump }}>
-      <nav className="nav">
-        <span className="brand"><span className="mark" aria-hidden="true">SL</span>Spend Lens</span>
-        {(Object.keys(PAGES) as PageId[]).map((id) => (
-          <a key={id} href={`#${id}`} aria-current={page === id ? "page" : undefined}>
-            {PAGES[id].label}
-          </a>
-        ))}
-      </nav>
-      <main>
-        {empty ? (
-          <div className="page">
-            <div className="card state">
-              <h2>No data yet</h2>
-              <p>Connect a bank or import a CSV file (for example, your Lunch Money export) on the Accounts page.</p>
-              <a className="button" href="#accounts">Go to Accounts</a>
+      <AppShell header={{ height: 48 }} navbar={{ width: 220, breakpoint: "sm", collapsed: { mobile: !opened } }} padding={0}>
+        <AppShell.Header>
+          <Group h="100%" px="md" gap="sm">
+            <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" aria-label="Toggle navigation" />
+            <span className="brand"><span className="mark" aria-hidden="true">SL</span>Spend Lens</span>
+          </Group>
+        </AppShell.Header>
+        <AppShell.Navbar p="xs" className={opened ? undefined : "nav-closed"}>
+          {(Object.keys(PAGES) as PageId[]).map((id) => (
+            <NavLink
+              key={id}
+              href={`#${id}`}
+              label={PAGES[id].label}
+              active={page === id}
+              aria-current={page === id ? "page" : undefined}
+              onClick={close}
+            />
+          ))}
+        </AppShell.Navbar>
+        <AppShell.Main>
+          {empty ? (
+            <div className="page">
+              <div className="card state">
+                <h2>No data yet</h2>
+                <p>Connect a bank or import a CSV file (for example, your Lunch Money export) on the Accounts page.</p>
+                <a className="button" href="#accounts">Go to Accounts</a>
+              </div>
             </div>
-          </div>
-        ) : (
-          <Page key={page} />
-        )}
-      </main>
+          ) : (
+            <Page key={page} />
+          )}
+        </AppShell.Main>
+      </AppShell>
       {drill && !txnId && <DrillDrawer drill={drill} onClose={closeDrill} />}
       {txnId && <TxnDetail id={txnId} onClose={() => setTxnId(null)} />}
     </Ctx.Provider>
