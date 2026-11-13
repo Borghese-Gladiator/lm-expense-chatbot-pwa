@@ -5,7 +5,7 @@ import { useState } from "react";
 import type { Filters, Txn } from "../api";
 import { api } from "../api";
 import { money2 } from "../format";
-import { Status, TxnTable, useApp, useAsync } from "../shared";
+import { LoadState, TransactionTable, useApp, useAsync } from "../shared";
 
 const PAGE = 100;
 
@@ -128,10 +128,10 @@ export function Transactions() {
               {data.total.toLocaleString()} transactions · net {money2(data.sum)}
             </Text>
           )}
-          <Status loading={loading && !data} error={error} empty={data?.total === 0} />
+          <LoadState loading={loading && !data} error={error} empty={data?.total === 0} />
           {data && data.items.length > 0 && (
             <>
-              <TxnTable items={data.items} onRowClick={(t) => openTxn(t.id)} selected={selected} onToggle={toggle} />
+              <TransactionTable items={data.items} onRowClick={(t) => openTxn(t.id)} selected={selected} onToggle={toggle} />
               <Group justify="center" gap="md">
                 <Button variant="subtle" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))}>← Previous</Button>
                 <Text c="dimmed" size="sm">{offset + 1}–{Math.min(offset + PAGE, data.total)} of {data.total}</Text>

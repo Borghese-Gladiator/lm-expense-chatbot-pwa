@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { api } from "../api";
 import { money2 } from "../format";
-import { Status, useApp, useAsync } from "../shared";
+import { LoadState, useApp, useAsync } from "../shared";
 
 interface PlaidItem {
   id: number;
@@ -134,7 +134,7 @@ export function Accounts() {
       )}
 
       <Section title="Accounts">
-        <Status empty={meta?.accounts.length === 0} emptyText="No accounts yet." />
+        <LoadState empty={meta?.accounts.length === 0} emptyText="No accounts yet." />
         {meta && meta.accounts.length > 0 && (
           <Table.ScrollContainer minWidth={560}>
             <Table fz="sm">
@@ -171,7 +171,7 @@ export function Accounts() {
       <CsvImport onDone={refresh} />
 
       <Section title="Sync and import history">
-        <Status empty={runs.data?.length === 0} emptyText="No syncs or imports yet." />
+        <LoadState empty={runs.data?.length === 0} emptyText="No syncs or imports yet." />
         {runs.data && runs.data.length > 0 && (
           <Table.ScrollContainer minWidth={640}>
             <Table fz="sm">

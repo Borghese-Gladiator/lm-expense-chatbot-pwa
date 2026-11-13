@@ -9,7 +9,7 @@ import { api, DIM_LABEL, MEASURE_LABEL, METRIC_LABEL, runQuery, TIME_DIMS } from
 import { Chart, resolveKind } from "../Chart";
 import type { Preset } from "../format";
 import { dimValue, metricValue, money, pct, PRESETS, presetRange, signedMoney } from "../format";
-import { Status, useApp, useAsync } from "../shared";
+import { LoadState, useApp, useAsync } from "../shared";
 import { ChangeTable } from "./Overview";
 
 interface Saved {
@@ -352,7 +352,7 @@ export function Explore() {
             </Group>
           )}
         </Group>
-        <Status loading={loading && !data} error={error} empty={data?.rows.length === 0} />
+        <LoadState loading={loading && !data} error={error} empty={data?.rows.length === 0} />
         {data && data.rows.length > 0 && (
           q.compare !== "none" ? (
             <>

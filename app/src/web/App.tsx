@@ -1,5 +1,5 @@
-import { AppShell, Burger, Group, NavLink } from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
+import { AppShell, Badge, Burger, Button, Container, Group, NavLink, Paper, Text, Title } from "@mantine/core";
+import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import { useCallback, useEffect, useState } from "react";
 
 import type { Drill } from "./api";
@@ -9,7 +9,7 @@ import { Explore } from "./pages/Explore";
 import { Overview } from "./pages/Overview";
 import { Settings } from "./pages/Settings";
 import { Transactions } from "./pages/Transactions";
-import { Ctx, DrillDrawer, useMeta } from "./shared";
+import { Ctx, DrilldownDrawer, useMeta } from "./shared";
 import { TxnDetail } from "./TxnDetail";
 
 const PAGES = {
@@ -33,6 +33,7 @@ export default function App() {
   const [txnId, setTxnId] = useState<number | null>(null);
   const [version, setVersion] = useState(0);
   const [opened, { toggle, close }] = useDisclosure();
+  const mobile = useMediaQuery("(max-width: 47.99em)");
   const bump = useCallback(() => setVersion((v) => v + 1), []);
   const closeDrill = useCallback(() => setDrill(null), []);
 
@@ -63,10 +64,13 @@ export default function App() {
         <AppShell.Header>
           <Group h="100%" px="md" gap="sm">
             <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" aria-label="Toggle navigation" />
-            <span className="brand"><span className="mark" aria-hidden="true">SL</span>Spend Lens</span>
+            <Group gap={8} wrap="nowrap">
+              <Badge radius="sm" aria-hidden="true">SL</Badge>
+              <Text fw={700}>Spend Lens</Text>
+            </Group>
           </Group>
         </AppShell.Header>
-        <AppShell.Navbar p="xs" className={opened ? undefined : "nav-closed"}>
+        <AppShell.Navbar p="xs" style={mobile && !opened ? { visibility: "hidden" } : undefined}>
           {(Object.keys(PAGES) as PageId[]).map((id) => (
             <NavLink
               key={id}
@@ -80,19 +84,19 @@ export default function App() {
         </AppShell.Navbar>
         <AppShell.Main>
           {empty ? (
-            <div className="page">
-              <div className="card state">
-                <h2>No data yet</h2>
-                <p>Connect a bank or import a CSV file (for example, your Lunch Money export) on the Accounts page.</p>
-                <a className="button" href="#accounts">Go to Accounts</a>
-              </div>
-            </div>
+            <Container size="xl" py="lg">
+              <Paper withBorder p="xl" ta="center">
+                <Title order={2} size="h4" mb="sm">No data yet</Title>
+                <Text c="dimmed" mb="md">Connect a bank or import a CSV file (for example, your Lunch Money export) on the Accounts page.</Text>
+                <Button component="a" href="#accounts">Go to Accounts</Button>
+              </Paper>
+            </Container>
           ) : (
             <Page key={page} />
           )}
         </AppShell.Main>
       </AppShell>
-      {drill && !txnId && <DrillDrawer drill={drill} onClose={closeDrill} />}
+      {drill && !txnId && <DrilldownDrawer drill={drill} onClose={closeDrill} />}
       {txnId && <TxnDetail id={txnId} onClose={() => setTxnId(null)} />}
     </Ctx.Provider>
   );

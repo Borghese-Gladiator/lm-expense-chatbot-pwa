@@ -7,7 +7,7 @@ import { runQuery } from "../api";
 import { Chart } from "../Chart";
 import type { Preset } from "../format";
 import { dimValue, iso, money, pct, PRESETS, presetRange, signedMoney } from "../format";
-import { Status, useApp, useAsync } from "../shared";
+import { LoadState, useApp, useAsync } from "../shared";
 
 const base = (measure: Measure, start: string, end: string, extra: Partial<AnalyticsQuery> = {}): AnalyticsQuery => ({
   measure,
@@ -105,7 +105,7 @@ export function Overview() {
           <Text c="dimmed" size="sm">{start} → {end}</Text>
         </Group>
       </Group>
-      <Status loading={loading && !data} error={error} empty={meta?.date_bounds.start == null} />
+      <LoadState loading={loading && !data} error={error} empty={meta?.date_bounds.start == null} />
       {data && s && i && (
         <>
           <SimpleGrid cols={{ base: 1, xs: 2, md: 4 }}>
