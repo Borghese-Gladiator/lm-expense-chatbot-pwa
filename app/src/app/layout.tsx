@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { ColorSchemeScript, MantineProvider, createTheme, mantineHtmlProps } from "@mantine/core";
 
@@ -14,6 +14,7 @@ const theme = createTheme({
 });
 
 export const metadata: Metadata = { title: "Spend Lens" };
+export const viewport: Viewport = { themeColor: "#2a78d6" };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
