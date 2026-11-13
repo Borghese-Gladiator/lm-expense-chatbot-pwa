@@ -1,4 +1,5 @@
 import { Anchor, Button, Card, Checkbox, Group, Select, Stack, Table, Text, TextInput, Title } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
 import { useState } from "react";
 
 import type { Category } from "../api";
@@ -71,6 +72,7 @@ export function Settings() {
           setErr(null);
           try {
             await api("/categories", { ...draft, group_name: draft.group_name || null });
+            notifications.show({ color: "green", title: "Category saved", message: `${draft.name} is saved.` });
             setDraft(EMPTY);
             saved();
           } catch (ex) {
