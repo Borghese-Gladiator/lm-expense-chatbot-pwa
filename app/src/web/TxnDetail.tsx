@@ -1,3 +1,4 @@
+import { Drawer, Text, Title } from "@mantine/core";
 import { useState } from "react";
 
 import { api } from "./api";
@@ -34,12 +35,13 @@ export function TxnDetail({ id, onClose }: { id: number; onClose: () => void }) 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  if (!data) return (
-    <aside className="drawer" role="dialog" aria-label="Transaction">
-      <header><h2>Transaction</h2><button className="ghost" onClick={onClose} aria-label="Close">✕</button></header>
-      <Status loading={loading} error={error} />
-    </aside>
+  const shell = (title: React.ReactNode, body: React.ReactNode) => (
+    <Drawer opened onClose={onClose} position="right" size="xl" title={title} closeButtonProps={{ "aria-label": "Close" }}>
+      {body}
+    </Drawer>
   );
+
+  if (!data) return shell(<Title order={2} size="h4">Transaction</Title>, <Status loading={loading} error={error} />);
 
   const v = { ...data, ...draft };
   const save = async () => {
@@ -65,15 +67,12 @@ export function TxnDetail({ id, onClose }: { id: number; onClose: () => void }) 
     }
   };
 
-  return (
-    <aside className="drawer" role="dialog" aria-label="Transaction">
-      <header>
-        <div>
-          <h2>{data.merchant ?? data.payee_raw}</h2>
-          <p className="muted">{data.date} · {data.account} · {money2(data.amount)} {data.currency}</p>
-        </div>
-        <button className="ghost" onClick={onClose} aria-label="Close">✕</button>
-      </header>
+  return shell(
+    <div>
+      <Title order={2} size="h4">{data.merchant ?? data.payee_raw}</Title>
+      <Text c="dimmed" size="sm">{data.date} · {data.account} · {money2(data.amount)} {data.currency}</Text>
+    </div>,
+    <>
       <div className="form">
         <label>Merchant<input value={v.merchant ?? ""} onChange={(e) => setDraft({ ...draft, merchant: e.target.value })} /></label>
         <label>Category
@@ -116,6 +115,6 @@ export function TxnDetail({ id, onClose }: { id: number; onClose: () => void }) 
         <summary>Raw data</summary>
         <pre>{JSON.stringify(data.raw, null, 2)}</pre>
       </details>
-    </aside>
+    </>,
   );
 }
