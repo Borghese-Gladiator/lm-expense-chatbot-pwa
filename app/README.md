@@ -31,10 +31,11 @@ scripts/seed-demo.ts
 ## Run on your machine
 
 ```bash
-npm install
-npm run seed     # optional: 2 years of fake data
+npm run setup    # install, make .env with new secrets, seed 2 years of fake data
 npm run dev      # http://localhost:3000
 ```
+
+`npm run setup` does not change an existing `.env`, and it seeds only an empty database.
 
 With no `DATABASE_URL`, the app keeps its data in PGlite (Postgres in the Node process) in `.data/pglite`.
 Run `npm run dev` or `npm run seed` one at a time, because PGlite opens the folder for one process only.
