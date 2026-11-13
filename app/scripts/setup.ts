@@ -8,7 +8,7 @@ import { loadSettings } from "../src/server/config";
 import { openDb, scalar } from "../src/server/db";
 import { seedDemo } from "../src/server/mock";
 
-const SECRETS = ["APP_SECRET_KEY", "CRON_SECRET"];
+const SECRETS = ["ROOT_SECRET"];
 
 export function writeEnv(dir: string): boolean {
   const env = join(dir, ".env");
