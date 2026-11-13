@@ -105,16 +105,28 @@ export class PlaidClient {
   }
 }
 
-export async function createLinkToken(client: PlaidClient): Promise<string> {
+export async function createLinkToken(client: PlaidClient, accessToken?: string): Promise<string> {
   const data = await client.post("/link/token/create", {
     client_name: "Spend Lens",
     language: "en",
     country_codes: ["US", "CA"],
     user: { client_user_id: "owner" },
-    products: ["transactions"],
-    transactions: { days_requested: 730 },
+    ...(accessToken
+      ? { access_token: accessToken }
+      : { products: ["transactions"], transactions: { days_requested: 730 } }),
   });
   return String(data.link_token);
+}
+
+export async function createUpdateLinkToken(db: Db, client: PlaidClient, itemPk: number): Promise<string | null> {
+  const enc = await scalar<string | undefined>(db, "SELECT access_token_enc FROM plaid_items WHERE id = ?", [itemPk]);
+  if (enc === undefined) return null;
+  return createLinkToken(client, decrypt(enc, client.settings.appSecretKey));
+}
+
+export async function markReconnected(db: Db, itemPk: number): Promise<boolean> {
+  const rows = await db.query("UPDATE plaid_items SET status = 'ok', error = NULL WHERE id = ? RETURNING id", [itemPk]);
+  return rows.length > 0;
 }
 
 export async function exchangePublicToken(

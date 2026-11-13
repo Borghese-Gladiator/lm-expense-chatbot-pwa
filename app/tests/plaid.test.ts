@@ -44,6 +44,7 @@ class FakePlaid {
     const body = JSON.parse(String(init?.body));
     this.calls.push([path, body]);
     if (path === "/item/public_token/exchange") return Response.json({ access_token: "access-secret", item_id: "item1" });
+    if (path === "/link/token/create") return Response.json({ link_token: "link-1" });
     if (path === "/accounts/get") return Response.json({ accounts: [ACCOUNT] });
     if (path === "/transactions/sync") {
       const page = this.pages.shift()!;
@@ -134,4 +135,17 @@ it("restarts after a mutation during pagination", async () => {
   const [client, item] = await connect(fake);
   expect((await plaid.syncItem(db, client, item)).added).toBe(1);
   expect(await scalar(db, "SELECT cursor FROM plaid_items")).toBe("c9");
+});
+
+it("makes an update-mode link token and clears reconnect", async () => {
+  const fake = new FakePlaid([{ added: [], next_cursor: "c1", has_more: false }, 400]);
+  const [client, item] = await connect(fake);
+  await plaid.syncItem(db, client, item);
+  await expect(plaid.syncItem(db, client, item)).rejects.toBeInstanceOf(plaid.PlaidError);
+  await plaid.createUpdateLinkToken(db, client, item);
+  const [path, body] = fake.calls.at(-1)!;
+  expect([path, body.access_token, body.products]).toEqual(["/link/token/create", "access-secret", undefined]);
+  expect(await plaid.createUpdateLinkToken(db, client, 999)).toBeNull();
+  expect(await plaid.markReconnected(db, item)).toBe(true);
+  expect(await db.query("SELECT id, status, cursor FROM plaid_items")).toEqual([{ id: item, status: "ok", cursor: "c1" }]);
 });

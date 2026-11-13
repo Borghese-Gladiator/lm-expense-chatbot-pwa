@@ -146,9 +146,12 @@ export async function seedDemo(db: Db): Promise<number> {
         "Top merchants", JSON.stringify({ measure: "spending", metric: "total", dimensions: ["merchant"], filters: {}, compare: "none", limit: 15 }),
       ],
     );
-    await tx.query("INSERT INTO plaid_items (item_id, institution, access_token_enc) VALUES ('mock-item', 'Mock Bank', ?)", [
-      encrypt("mock-access-token", mockSettings(loadSettings()).appSecretKey),
-    ]);
+    const token = encrypt("mock-access-token", mockSettings(loadSettings()).appSecretKey);
+    await tx.query(
+      `INSERT INTO plaid_items (item_id, institution, access_token_enc, status, error)
+       VALUES ('mock-item', 'Mock Bank', ?, 'ok', NULL), ('mock-item-2', 'Mock Credit Union', ?, 'reconnect', 'ITEM_LOGIN_REQUIRED: x')`,
+      [token, token],
+    );
   });
   return rows.length;
 }
