@@ -1,4 +1,5 @@
 import { Alert, Button, Card, FileInput, Group, Select, Stack, Table, Text, TextInput, Title } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
 import { useState } from "react";
 
 import { api } from "../api";
@@ -167,7 +168,7 @@ export function Accounts() {
         <AddAccount onDone={refresh} />
       </Section>
 
-      <CsvImport onDone={(text) => { setMsg({ text }); refresh(); }} />
+      <CsvImport onDone={refresh} />
 
       <Section title="Sync and import history">
         <Status empty={runs.data?.length === 0} emptyText="No syncs or imports yet." />
@@ -231,18 +232,16 @@ function AddAccount({ onDone }: { onDone: () => void }) {
   );
 }
 
-function CsvImport({ onDone }: { onDone: (msg: string) => void }) {
+function CsvImport({ onDone }: { onDone: () => void }) {
   const { meta } = useApp();
   const [file, setFile] = useState<File | null>(null);
   const [accountId, setAccountId] = useState<string | null>(null);
   const [sign, setSign] = useState("negative_is_expense");
   const [result, setResult] = useState<{ added: number; skipped_duplicates: number; errors: string[]; accounts_created: string[] } | null>(null);
-  const [err, setErr] = useState<string | null>(null);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file) return;
-    setErr(null);
     try {
       const r = await api<typeof result & object>("/import/csv", {
         csv_text: await file.text(),
@@ -250,9 +249,10 @@ function CsvImport({ onDone }: { onDone: (msg: string) => void }) {
         sign,
       });
       setResult(r);
-      onDone(`Imported ${r.added} transactions. Skipped ${r.skipped_duplicates} duplicates.`);
+      notifications.show({ color: "green", title: "Import done", message: `Imported ${r.added} transactions. Skipped ${r.skipped_duplicates} duplicates.` });
+      onDone();
     } catch (ex) {
-      setErr((ex as Error).message);
+      notifications.show({ color: "red", title: "Import failed", message: (ex as Error).message });
     }
   };
 
@@ -285,7 +285,6 @@ function CsvImport({ onDone }: { onDone: (msg: string) => void }) {
           <Button type="submit" disabled={!file}>Import</Button>
         </Group>
       </form>
-      {err && <Alert color="red" role="alert" mt="sm">{err}</Alert>}
       {result && result.errors.length > 0 && (
         <details>
           <summary><Text span c="red" size="sm">{result.errors.length} rows not imported</Text></summary>

@@ -4,6 +4,8 @@ import { ColorSchemeScript, MantineProvider, createTheme, mantineHtmlProps } fro
 
 import "@mantine/core/styles.css";
 import "@mantine/dates/styles.css";
+import "@mantine/notifications/styles.css";
+import { Notifications } from "@mantine/notifications";
 import "../web/styles.css";
 
 const ICON =
@@ -25,6 +27,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       </head>
       <body>
         <MantineProvider theme={theme} defaultColorScheme="auto">
+          <Notifications />
           {children}
         </MantineProvider>
       </body>
