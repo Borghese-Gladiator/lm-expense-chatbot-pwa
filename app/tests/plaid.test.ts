@@ -107,6 +107,19 @@ it("marks reconnect on a failed sync and keeps the data", async () => {
   expect((await db.query("SELECT status FROM sync_runs ORDER BY id")).map((r) => r.status)).toEqual(["ok", "error"]);
 });
 
+it("runs one sync at a time for each connection", async () => {
+  const fake = new FakePlaid([{ added: [txn("t1", 5)], next_cursor: "c1", has_more: false }]);
+  const [client, item] = await connect(fake);
+  const results = await Promise.allSettled([plaid.syncItem(db, client, item), plaid.syncItem(db, client, item)]);
+  expect(results.map((r) => r.status).sort()).toEqual(["fulfilled", "rejected"]);
+  const failed = results.find((r) => r.status === "rejected") as PromiseRejectedResult;
+  expect(failed.reason.code).toBe(plaid.SYNC_RUNNING);
+  expect(await scalar(db, "SELECT COUNT(*) FROM transactions")).toBe(1);
+  expect(await scalar(db, "SELECT status FROM plaid_items")).toBe("ok");
+  fake.pages = [{ added: [], next_cursor: "c2", has_more: false }];
+  await plaid.syncItem(db, client, item);
+});
+
 it("restarts after a mutation during pagination", async () => {
   const fake = new FakePlaid([
     { added: [txn("t1", 5)], next_cursor: "c1", has_more: true },

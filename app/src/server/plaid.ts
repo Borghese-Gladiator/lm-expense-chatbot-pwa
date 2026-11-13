@@ -10,6 +10,7 @@ import { categoryIdFor, one, scalar, type Db, type Row } from "./db";
 
 const HOSTS = { sandbox: "https://sandbox.plaid.com", production: "https://production.plaid.com" };
 const MAX_RESTARTS = 3;
+export const SYNC_RUNNING = "SYNC_ALREADY_RUNNING";
 
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -221,10 +222,29 @@ async function apply(db: Db, data: Awaited<ReturnType<typeof fetchAll>>): Promis
 export async function syncItem(db: Db, client: PlaidClient, itemPk: number) {
   const item = await one<{ access_token_enc: string; cursor: string | null; institution: string | null }>(
     db,
-    "SELECT * FROM plaid_items WHERE id = ?",
+    `UPDATE plaid_items SET sync_started_at = now()
+     WHERE id = ? AND (sync_started_at IS NULL OR sync_started_at < now() - interval '10 minutes')
+     RETURNING *`,
     [itemPk],
   );
-  if (!item) throw new PlaidError("NOT_FOUND", "no such connection");
+  if (!item) {
+    if (await scalar(db, "SELECT 1 FROM plaid_items WHERE id = ?", [itemPk]))
+      throw new PlaidError(SYNC_RUNNING, "a sync is already running for this connection");
+    throw new PlaidError("NOT_FOUND", "no such connection");
+  }
+  try {
+    return await runSync(db, client, itemPk, item);
+  } finally {
+    await db.query("UPDATE plaid_items SET sync_started_at = NULL WHERE id = ?", [itemPk]);
+  }
+}
+
+async function runSync(
+  db: Db,
+  client: PlaidClient,
+  itemPk: number,
+  item: { access_token_enc: string; cursor: string | null; institution: string | null },
+) {
   const runId = await scalar(db, "INSERT INTO sync_runs (source, plaid_item_id) VALUES ('plaid', ?) RETURNING id", [
     itemPk,
   ]);
