@@ -112,9 +112,6 @@ tr.clickable:hover, td.clickable:hover { background: var(--hover); }
 .list li { display: grid; grid-template-columns: 110px 1fr auto auto; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .list li:has(button) { grid-template-columns: 1fr auto auto; }
 
-.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(760px, 100vw); background: var(--surface); border-left: 1px solid var(--line); box-shadow: -12px 0 32px rgba(0, 0, 0, 0.15); padding: 16px; overflow-y: auto; z-index: 20; }
-.drawer header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
-.drawer header p { margin: 4px 0 0; }
 .form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .form .row, .form label:has(textarea) { grid-column: 1 / -1; }
 .kv { display: grid; grid-template-columns: 120px 1fr; gap: 4px 12px; margin: 0; font-size: 13px; }
