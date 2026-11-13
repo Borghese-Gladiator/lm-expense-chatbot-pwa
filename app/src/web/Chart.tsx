@@ -1,5 +1,6 @@
 import * as echarts from "echarts";
-import { useEffect, useRef, useState } from "react";
+import { useComputedColorScheme } from "@mantine/core";
+import { useEffect, useRef } from "react";
 
 import type { ChartKind, Dimension, Metric, QueryRow } from "./api";
 import { TIME_DIMS } from "./api";
@@ -27,17 +28,6 @@ const DARK = {
 };
 const MAX_SERIES = 8;
 
-function useDark() {
-  const query = window.matchMedia("(prefers-color-scheme: dark)");
-  const [dark, setDark] = useState(query.matches);
-  useEffect(() => {
-    const on = (e: MediaQueryListEvent) => setDark(e.matches);
-    query.addEventListener("change", on);
-    return () => query.removeEventListener("change", on);
-  }, [query]);
-  return dark;
-}
-
 export interface ChartProps {
   rows: QueryRow[];
   dimensions: Dimension[];
@@ -58,7 +48,7 @@ export function resolveKind(kind: ChartKind, dims: Dimension[]): Exclude<ChartKi
 
 export function Chart({ rows, dimensions, metric, kind, height = 320, horizontal, onPick }: ChartProps) {
   const el = useRef<HTMLDivElement>(null);
-  const dark = useDark();
+  const dark = useComputedColorScheme("light") === "dark";
   const t = dark ? DARK : LIGHT;
 
   useEffect(() => {
@@ -140,13 +130,13 @@ export function Chart({ rows, dimensions, metric, kind, height = 320, horizontal
         xAxis: {
           type: "category",
           data: xs,
-          axisLabel: { color: t.muted, formatter: (v: string) => dimValue(dim0, v) },
+          axisLabel: { color: t.ink2, formatter: (v: string) => dimValue(dim0, v) },
           axisLine: { lineStyle: { color: t.axis } },
           axisTick: { show: false },
         },
         yAxis: {
           type: "value",
-          axisLabel: { color: t.muted, formatter: axisFmt },
+          axisLabel: { color: t.ink2, formatter: axisFmt },
           splitLine: { lineStyle: { color: t.grid } },
         },
         series: names.map((name) => ({
@@ -171,13 +161,13 @@ export function Chart({ rows, dimensions, metric, kind, height = 320, horizontal
       const cat = {
         type: "category" as const,
         data: shown.map((r) => r.d0 ?? ""),
-        axisLabel: { color: t.muted, formatter: (v: string) => dimValue(dim0, v), width: 160, overflow: "truncate" as const },
+        axisLabel: { color: t.ink2, formatter: (v: string) => dimValue(dim0, v), width: 160, overflow: "truncate" as const },
         axisLine: { lineStyle: { color: t.axis } },
         axisTick: { show: false },
       };
       const val = {
         type: "value" as const,
-        axisLabel: { color: t.muted, formatter: axisFmt },
+        axisLabel: { color: t.ink2, formatter: axisFmt },
         splitLine: { lineStyle: { color: t.grid } },
       };
       const line = resolved === "line" || resolved === "area";
