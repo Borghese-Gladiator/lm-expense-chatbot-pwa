@@ -1,3 +1,5 @@
+import { Alert, Button, Card, Checkbox, Group, NumberInput, Select, Stack, Text, TextInput, Title } from "@mantine/core";
+import { DatePickerInput, DateInput } from "@mantine/dates";
 import { useState } from "react";
 
 import type { Filters, Txn } from "../api";
@@ -15,7 +17,7 @@ export function Transactions() {
   const [offset, setOffset] = useState(0);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [adding, setAdding] = useState(false);
-  const [bulkCat, setBulkCat] = useState("");
+  const [bulkCat, setBulkCat] = useState<string | null>(null);
 
   const body = { filters, ...flags, ...sort, offset, limit: PAGE };
   const { data, error, loading } = useAsync(
@@ -51,83 +53,108 @@ export function Transactions() {
     URL.revokeObjectURL(url);
   };
 
+  const accountData = (meta?.accounts ?? []).map((a) => ({ value: String(a.id), label: a.name }));
+  const categoryData = (meta?.categories ?? []).map((c) => ({ value: String(c.id), label: c.name }));
+
   return (
-    <div className="page">
-      <div className="toolbar">
-        <h1>Transactions</h1>
-        <div className="row">
-          <button onClick={() => setAdding(!adding)}>{adding ? "Cancel" : "Add transaction"}</button>
-          <button className="ghost" onClick={exportCsv}>Export CSV</button>
-        </div>
-      </div>
+    <Stack p="md" gap="md">
+      <Group justify="space-between" wrap="wrap">
+        <Title order={1} size="h2">Transactions</Title>
+        <Group gap="sm">
+          <Button variant="default" onClick={exportCsv}>Export CSV</Button>
+          <Button onClick={() => setAdding(!adding)}>{adding ? "Cancel" : "Add transaction"}</Button>
+        </Group>
+      </Group>
       {adding && <AddTxn onDone={() => { setAdding(false); bump(); }} />}
-      <section className="card">
-        <div className="row wrap filters">
-          <input placeholder="Search payee, merchant, notes" aria-label="Search" value={filters.search ?? ""} onChange={(e) => setF({ search: e.target.value || null })} />
-          <input type="date" aria-label="From" value={filters.start ?? ""} onChange={(e) => setF({ start: e.target.value || null })} />
-          <input type="date" aria-label="To" value={filters.end ?? ""} onChange={(e) => setF({ end: e.target.value || null })} />
-          <select aria-label="Account" value={filters.account_ids?.[0] ?? ""} onChange={(e) => setF({ account_ids: e.target.value ? [Number(e.target.value)] : [] })}>
-            <option value="">All accounts</option>
-            {meta?.accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
-          <select aria-label="Category" value={filters.category_ids?.[0] ?? ""} onChange={(e) => setF({ category_ids: e.target.value ? [Number(e.target.value)] : [] })}>
-            <option value="">All categories</option>
-            {meta?.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-          <select aria-label="Type" value={filters.types?.[0] ?? ""} onChange={(e) => setF({ types: e.target.value ? [e.target.value] : [] })}>
-            <option value="">All types</option>
-            <option value="expense">Expense</option>
-            <option value="income">Income</option>
-            <option value="transfer">Transfer</option>
-            <option value="adjustment">Adjustment</option>
-          </select>
-          <label className="check"><input type="checkbox" checked={flags.uncategorized} onChange={(e) => { setOffset(0); setFlags({ ...flags, uncategorized: e.target.checked }); }} />Uncategorized</label>
-          <label className="check"><input type="checkbox" checked={flags.unreviewed} onChange={(e) => { setOffset(0); setFlags({ ...flags, unreviewed: e.target.checked }); }} />Unreviewed</label>
-          <select aria-label="Sort" value={`${sort.sort}:${sort.desc}`} onChange={(e) => { const [s, d] = e.target.value.split(":"); setSort({ sort: s, desc: d === "true" }); }}>
-            <option value="date:true">Newest first</option>
-            <option value="date:false">Oldest first</option>
-            <option value="amount:false">Largest expense first</option>
-            <option value="amount:true">Largest income first</option>
-            <option value="merchant:false">Merchant A–Z</option>
-          </select>
-        </div>
-        {selected.size > 0 && (
-          <div className="row bulk">
-            <strong>{selected.size} selected</strong>
-            <select aria-label="Set category" value={bulkCat} onChange={(e) => setBulkCat(e.target.value)}>
-              <option value="">Set category…</option>
-              {meta?.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-            <button disabled={!bulkCat} onClick={() => bulk({ category_id: Number(bulkCat) })}>Apply</button>
-            <button onClick={() => bulk({ reviewed: true })}>Mark reviewed</button>
-            <button onClick={() => bulk({ type: "transfer" })}>Mark as transfer</button>
-            <button className="ghost" onClick={() => setSelected(new Set())}>Clear</button>
-          </div>
-        )}
-        {data && (
-          <p className="muted small">
-            {data.total.toLocaleString()} transactions · net {money2(data.sum)}
-          </p>
-        )}
-        <Status loading={loading && !data} error={error} empty={data?.total === 0} />
-        {data && data.items.length > 0 && (
-          <>
-            <TxnTable items={data.items} onRowClick={(t) => openTxn(t.id)} selected={selected} onToggle={toggle} />
-            <div className="row pager">
-              <button className="ghost" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))}>← Previous</button>
-              <span className="muted">{offset + 1}–{Math.min(offset + PAGE, data.total)} of {data.total}</span>
-              <button className="ghost" disabled={offset + PAGE >= data.total} onClick={() => setOffset(offset + PAGE)}>Next →</button>
-            </div>
-          </>
-        )}
-      </section>
-    </div>
+      <Card withBorder component="section" padding="md">
+        <Stack gap="sm">
+          <Group gap="sm" wrap="wrap" align="center">
+            <TextInput placeholder="Search payee, merchant, notes" aria-label="Search" value={filters.search ?? ""} onChange={(e) => setF({ search: e.currentTarget.value || null })} w={240} />
+            <DatePickerInput
+              type="range"
+              aria-label="Date range"
+              placeholder="Any date"
+              clearable
+              valueFormat="YYYY-MM-DD"
+              value={[filters.start ?? null, filters.end ?? null]}
+              onChange={([s, e]) => setF({ start: s, end: e })}
+              w={240}
+            />
+            <Select aria-label="Account" placeholder="All accounts" clearable data={accountData} value={filters.account_ids?.[0] != null ? String(filters.account_ids[0]) : null} onChange={(v) => setF({ account_ids: v ? [Number(v)] : [] })} w={170} />
+            <Select aria-label="Category" placeholder="All categories" clearable searchable data={categoryData} value={filters.category_ids?.[0] != null ? String(filters.category_ids[0]) : null} onChange={(v) => setF({ category_ids: v ? [Number(v)] : [] })} w={170} />
+            <Select
+              aria-label="Type"
+              placeholder="All types"
+              clearable
+              data={[
+                { value: "expense", label: "Expense" },
+                { value: "income", label: "Income" },
+                { value: "transfer", label: "Transfer" },
+                { value: "adjustment", label: "Adjustment" },
+              ]}
+              value={filters.types?.[0] ?? null}
+              onChange={(v) => setF({ types: v ? [v] : [] })}
+              w={140}
+            />
+            <Select
+              aria-label="Sort"
+              allowDeselect={false}
+              data={[
+                { value: "date:true", label: "Newest first" },
+                { value: "date:false", label: "Oldest first" },
+                { value: "amount:false", label: "Largest expense first" },
+                { value: "amount:true", label: "Largest income first" },
+                { value: "merchant:false", label: "Merchant A–Z" },
+              ]}
+              value={`${sort.sort}:${sort.desc}`}
+              onChange={(v) => { if (!v) return; const [s, d] = v.split(":"); setSort({ sort: s, desc: d === "true" }); }}
+              w={190}
+            />
+            <Checkbox label="Uncategorized" checked={flags.uncategorized} onChange={(e) => { setOffset(0); setFlags({ ...flags, uncategorized: e.currentTarget.checked }); }} />
+            <Checkbox label="Unreviewed" checked={flags.unreviewed} onChange={(e) => { setOffset(0); setFlags({ ...flags, unreviewed: e.currentTarget.checked }); }} />
+          </Group>
+          {selected.size > 0 && (
+            <Group gap="sm" wrap="wrap">
+              <Text fw={600}>{selected.size} selected</Text>
+              <Select aria-label="Set category" placeholder="Set category…" searchable data={categoryData} value={bulkCat} onChange={setBulkCat} w={190} />
+              <Button size="xs" disabled={!bulkCat} onClick={() => bulk({ category_id: Number(bulkCat) })}>Apply</Button>
+              <Button size="xs" variant="default" onClick={() => bulk({ reviewed: true })}>Mark reviewed</Button>
+              <Button size="xs" variant="default" onClick={() => bulk({ type: "transfer" })}>Mark as transfer</Button>
+              <Button size="xs" variant="subtle" onClick={() => setSelected(new Set())}>Clear</Button>
+            </Group>
+          )}
+          {data && (
+            <Text c="dimmed" size="sm">
+              {data.total.toLocaleString()} transactions · net {money2(data.sum)}
+            </Text>
+          )}
+          <Status loading={loading && !data} error={error} empty={data?.total === 0} />
+          {data && data.items.length > 0 && (
+            <>
+              <TxnTable items={data.items} onRowClick={(t) => openTxn(t.id)} selected={selected} onToggle={toggle} />
+              <Group justify="center" gap="md">
+                <Button variant="subtle" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))}>← Previous</Button>
+                <Text c="dimmed" size="sm">{offset + 1}–{Math.min(offset + PAGE, data.total)} of {data.total}</Text>
+                <Button variant="subtle" disabled={offset + PAGE >= data.total} onClick={() => setOffset(offset + PAGE)}>Next →</Button>
+              </Group>
+            </>
+          )}
+        </Stack>
+      </Card>
+    </Stack>
   );
 }
 
 function AddTxn({ onDone }: { onDone: () => void }) {
   const { meta } = useApp();
-  const [form, setForm] = useState({ account_id: "", date: new Date().toISOString().slice(0, 10), amount: "", payee: "", category_id: "", direction: "out" });
+  const [form, setForm] = useState({
+    account_id: null as string | null,
+    date: new Date().toISOString().slice(0, 10) as string | null,
+    amount: "" as string | number,
+    payee: "",
+    category_id: null as string | null,
+    direction: "out",
+  });
   const [err, setErr] = useState<string | null>(null);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -146,26 +173,19 @@ function AddTxn({ onDone }: { onDone: () => void }) {
       setErr((ex as Error).message);
     }
   };
-  if (!meta?.accounts.length) return <div className="card state">Add an account on the Accounts page first.</div>;
+  if (!meta?.accounts.length) return <Alert color="gray">Add an account on the Accounts page first.</Alert>;
   return (
-    <form className="card row wrap" onSubmit={submit}>
-      <label>Account<select required value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })}>
-        <option value="">Choose…</option>
-        {meta.accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-      </select></label>
-      <label>Date<input type="date" required value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></label>
-      <label>Payee<input required value={form.payee} onChange={(e) => setForm({ ...form, payee: e.target.value })} /></label>
-      <label>Amount<input type="number" step="0.01" min="0" required value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></label>
-      <label>Direction<select value={form.direction} onChange={(e) => setForm({ ...form, direction: e.target.value })}>
-        <option value="out">Money out</option>
-        <option value="in">Money in</option>
-      </select></label>
-      <label>Category<select value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}>
-        <option value="">Uncategorized</option>
-        {meta.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-      </select></label>
-      <button>Add</button>
-      {err && <span className="error">{err}</span>}
-    </form>
+    <Card withBorder component="form" padding="md" onSubmit={submit}>
+      <Group gap="sm" align="flex-end" wrap="wrap">
+        <Select label="Account" required placeholder="Choose…" data={meta.accounts.map((a) => ({ value: String(a.id), label: a.name }))} value={form.account_id} onChange={(v) => setForm({ ...form, account_id: v })} w={180} />
+        <DateInput label="Date" required valueFormat="YYYY-MM-DD" value={form.date} onChange={(v) => setForm({ ...form, date: v })} w={150} />
+        <TextInput label="Payee" required value={form.payee} onChange={(e) => setForm({ ...form, payee: e.currentTarget.value })} w={180} />
+        <NumberInput label="Amount" required min={0} decimalScale={2} value={form.amount} onChange={(v) => setForm({ ...form, amount: v })} w={120} />
+        <Select label="Direction" allowDeselect={false} data={[{ value: "out", label: "Money out" }, { value: "in", label: "Money in" }]} value={form.direction} onChange={(v) => v && setForm({ ...form, direction: v })} w={140} />
+        <Select label="Category" placeholder="Uncategorized" clearable searchable data={meta.categories.map((c) => ({ value: String(c.id), label: c.name }))} value={form.category_id} onChange={(v) => setForm({ ...form, category_id: v })} w={180} />
+        <Button type="submit">Add</Button>
+      </Group>
+      {err && <Text c="red" size="sm" mt="sm">{err}</Text>}
+    </Card>
   );
 }
