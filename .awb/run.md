@@ -2,17 +2,17 @@
 
 ## setup
 ```sh
-cd app && uv sync --extra dev && npm ci --prefix frontend
+cd spend_lens && uv sync --extra dev && npm ci --prefix frontend
 ```
 
 ## start
 ```sh
-cd app && npm run build --prefix frontend && DB="$(mktemp -d)/demo.duckdb" && PYTHONPATH=. uv run python scripts/seed_demo.py "$DB" && DUCKDB_PATH="$DB" ANTHROPIC_API_KEY= PLAID_CLIENT_ID= exec uv run uvicorn app.main:app --port {port}
+cd spend_lens && npm run build --prefix frontend && DB="$(mktemp -d)/demo.duckdb" && PYTHONPATH=. uv run python scripts/seed_demo.py "$DB" && DUCKDB_PATH="$DB" ANTHROPIC_API_KEY= PLAID_CLIENT_ID= exec uv run uvicorn app.main:app --port {port}
 ```
 url: http://127.0.0.1:{port}
 ready: /api/health
 
 ## test
 ```sh
-PYTHONPATH=app uv run --project app --extra dev python -m pytest -q -p no:cacheprovider --junitxml={report} {tests}
+PYTHONPATH=spend_lens uv run --project spend_lens --extra dev python -m pytest -q -p no:cacheprovider --junitxml={report} {tests}
 ```
