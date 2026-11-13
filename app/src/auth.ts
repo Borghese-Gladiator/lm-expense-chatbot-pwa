@@ -45,8 +45,11 @@ async function login(req: Request, password: string): Promise<Response> {
  * - Vercel Cron: `Authorization: Bearer CRON_SECRET`, only on /api/cron/*.
  * - No APP_PASSWORD on a Vercel deploy: refuse everything, so bank data is never public.
  */
+const PUBLIC = /^\/(favicon\.ico|apple-icon\.png|manifest\.webmanifest|icons\/[^/]+\.png)$/;
+
 export async function authorize(req: Request, env: NodeJS.ProcessEnv = process.env): Promise<Response | null> {
   const path = new URL(req.url).pathname;
+  if (PUBLIC.test(path)) return null;
   if (path.startsWith("/api/cron/")) {
     const { cronSecret } = loadSettings(env);
     if (cronSecret && same(req.headers.get("authorization") ?? "", `Bearer ${cronSecret}`)) return null;
