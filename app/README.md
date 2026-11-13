@@ -51,7 +51,8 @@ Run `npm run dev` or `npm run seed` one at a time, because PGlite opens the fold
 
 | Variable | Use | Default |
 |---|---|---|
-| `DATABASE_URL` | Postgres connection | empty = PGlite |
+| `DATABASE_URL` | Postgres connection. The schema setup always uses it. | empty = PGlite |
+| `DATABASE_URL_POOLED` | Pooled Postgres connection (for example Neon `-pooler`) for queries | `DATABASE_URL` |
 | `PGLITE_DIR` | PGlite data folder | `.data/pglite` |
 | `APP_PASSWORD` | Shared password. Required on Vercel. | — |
 | `CRON_SECRET` | Lets Vercel Cron call `/api/cron/sync` | — |
