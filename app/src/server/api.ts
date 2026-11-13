@@ -110,7 +110,7 @@ async function patchTxns(db: Db, ids: number[], body: z.infer<typeof TxnPatch>) 
 }
 
 function plaidFailure(e: unknown): never {
-  if (e instanceof plaid.PlaidError) throw new HttpError(502, e.message);
+  if (e instanceof plaid.PlaidError) throw new HttpError(e.code === plaid.SYNC_RUNNING ? 409 : 502, e.message);
   if (e instanceof Error && e.message.startsWith("APP_SECRET_KEY")) throw new HttpError(502, e.message);
   throw e;
 }
