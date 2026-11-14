@@ -10,11 +10,13 @@ The work items are in order inside each section. Requirement IDs refer to [PRD.m
 
 ## Milestone 1: Independent foundation
 
-- [ ] **Account mapping.** Let the user merge a Plaid account into a migrated CSV account. Move the transactions and delete the empty account.
-- [ ] **Plaid and CSV reconciliation.** Recommended approach: give each account a `history_cutover` date. Plaid skips transactions before that date, and the CSV history covers them. As a second step, match on account, amount, and a date that is within 3 days. Show the possible duplicates for review.
-- [ ] **Plaid Link update mode** (BANK-06). For a connection with status `reconnect`, open Link with the item's access token.
-- [ ] **Last sync time for each connection** (BANK-07).
+- [x] **Account mapping.** Let the user merge a Plaid account into a migrated CSV account. Move the transactions and delete the empty account.
+- [x] **Plaid and CSV reconciliation.** Recommended approach: give each account a `history_cutover` date. Plaid skips transactions before that date, and the CSV history covers them. As a second step, match on account, amount, and a date that is within 3 days. Show the possible duplicates for review.
+- [x] **Plaid Link update mode** (BANK-06). For a connection with status `reconnect`, open Link with the item's access token.
+- [x] **Last sync time for each connection** (BANK-07).
 - [ ] **Basic rules engine** (Feature E). Add a `rules` table with conditions (text contains, account, amount range) and actions (category, merchant, tags, reviewed). Run rules on new rows in CSV import and Plaid sync. Skip rows with `user_edited`. Add a preview endpoint and an "apply to past transactions" action. Add `rule_executions` for the audit and undo.
+  - Done: the `rules` table, conditions, actions, and rules on import and sync (PR #28).
+  - Open: preview, "apply to past transactions", and undo. The awb task `430c0f2a` stopped when the disk was full. Run `awb retry 430c0f2a`.
 
 ## Milestone 2: Convert the UI to Mantine
 
@@ -38,9 +40,10 @@ The goal is the same features on Mantine components, with no new features. At th
 
 ## Milestone 4: Spending analytics
 
-- [ ] **Presets** (EXP-01, EXP-02). Add "Last 3 complete months", "Last 30 days", and "Last 90 days". Label each preset as rolling or calendar. Change "Last 12 months" to stop at the end of the previous month.
-- [ ] **YTD comparison default** (YOY-02, YOY-03). When the preset is YTD, set the comparison to "Same period last year".
+- [x] **Presets** (EXP-01, EXP-02). Add "Last 3 complete months", "Last 30 days", and "Last 90 days". Label each preset as rolling or calendar. Change "Last 12 months" to stop at the end of the previous month.
+- [x] **YTD comparison default** (YOY-02, YOY-03). When the preset is YTD, set the comparison to "Same period last year".
 - [ ] **Year-over-year overlay chart** (YOY-04). Add a `month_of_year` dimension. Then the query `dimensions: ["month_of_year", "year"]` with a line chart shows one line for each year. The comparison logic does not need a change.
+  - The code is on branch `awb/analytics-year-over-year-overl-d1c9fd`, and the logic test passes. The awb task `d1c9fdc0` failed 3 times, because its browser claim reads a legend that ECharts draws on a canvas. Replace the task with a claim on the result table, which has one column for each year.
 - [ ] **Category exclusion** (EXP-09). Add `exclude_category_ids` to `Filters` and an "Exclude" action on breakdown rows.
 - [ ] **Category to merchant drill-down** (EXP-07). In the comparison table, a click on a category opens the same comparison grouped by merchant, with that category as a filter.
 - [ ] **Explore summary cards** (EXP-10). Show total, average for each month, change, and count above the chart.
@@ -77,7 +80,7 @@ The goal is the same features on Mantine components, with no new features. At th
 - [x] **Transactions and isolation.** Sync and import already use `BEGIN`. Make sure that Plaid sync cannot run 2 times at once for the same connection. A Postgres advisory lock does this.
 - [x] **Idempotency keys.** Add them to CSV import and the bank connect flow, so that a retry does not add rows 2 times.
 - [x] **Connection pooling.** The pool has `max: 3`. On Vercel, use the Neon pooled connection URL.
-- [ ] **Pagination.** Use cursor pagination on the transaction list.
+- [x] **Pagination.** Use cursor pagination on the transaction list.
 - [x] **Timeouts and retries.** Set timeouts on Plaid and Anthropic calls. Retry with backoff only on errors that are safe to retry.
 
 ## Backlog
