@@ -10,6 +10,7 @@ import { z } from "zod";
 
 import { BadRequest } from "./analytics";
 import { categoryIdFor, scalar, type Db } from "./db";
+import { applyRules } from "./rules";
 
 const ALIASES: Record<string, string[]> = {
   id: ["id", "transaction id", "transaction_id"],
@@ -131,6 +132,7 @@ export async function importCsv(db: Db, req: CsvImportRequest, currency: string)
   const errors: string[] = [];
   const created: string[] = [];
   const seen = new Map<string, number>();
+  const newIds: number[] = [];
 
   await db.tx(async (t) => {
     for (const [index, cells] of body.entries()) {
@@ -166,11 +168,11 @@ export async function importCsv(db: Db, req: CsvImportRequest, currency: string)
         const categoryId = get("category") ? await categoryIdFor(t, get("category"), get("group") || null) : null;
         const tags = get("tags").split(",").map((s) => s.trim()).filter(Boolean);
         const raw = Object.fromEntries(headers.map((h, i) => [h, cells[i] ?? ""]));
-        await t.query(
+        const [ins] = await t.query<{ id: number }>(
           `INSERT INTO transactions
              (source, source_id, account_id, date, amount, currency, payee_raw,
               merchant, category_id, tags, notes, type, is_pending, raw)
-           VALUES ('csv', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES ('csv', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
           [
             sourceId,
             accountId,
@@ -187,12 +189,14 @@ export async function importCsv(db: Db, req: CsvImportRequest, currency: string)
             JSON.stringify(raw),
           ],
         );
+        newIds.push(Number(ins.id));
         added++;
       } catch (e) {
         if (!(e instanceof RowError)) throw e;
         errors.push(`line ${index + 2}: ${e.message}`);
       }
     }
+    await applyRules(t, newIds);
   });
 
   await db.query(

@@ -7,6 +7,7 @@
 import type { Settings } from "./config";
 import { decrypt, encrypt } from "./crypto";
 import { categoryIdFor, one, scalar, type Db, type Row } from "./db";
+import { applyRules } from "./rules";
 
 const HOSTS = { sandbox: "https://sandbox.plaid.com", production: "https://production.plaid.com" };
 const MAX_RESTARTS = 3;
@@ -214,6 +215,7 @@ async function apply(db: Db, data: Awaited<ReturnType<typeof fetchAll>>): Promis
   let added = 0;
   let modified = 0;
   let removed = 0;
+  const newIds: number[] = [];
   for (const t of data.added) {
     const acct = await one<{ id: number; history_cutover: string | null }>(
       db,
@@ -230,12 +232,12 @@ async function apply(db: Db, data: Awaited<ReturnType<typeof fetchAll>>): Promis
           [t.pending_transaction_id],
         )
       : undefined;
-    await db.query(
+    const ins = await db.query<{ id: number }>(
       `INSERT INTO transactions
          (source, source_id, account_id, date, amount, currency, payee_raw, merchant,
           category_id, tags, notes, type, is_pending, reviewed, user_edited, raw)
        VALUES ('plaid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT (source, source_id) DO NOTHING`,
+       ON CONFLICT (source, source_id) DO NOTHING RETURNING id`,
       [
         t.transaction_id,
         account,
@@ -254,8 +256,10 @@ async function apply(db: Db, data: Awaited<ReturnType<typeof fetchAll>>): Promis
         JSON.stringify(t),
       ],
     );
+    newIds.push(...ins.map((r) => Number(r.id)));
     added++;
   }
+  await applyRules(db, newIds);
   for (const t of data.modified) {
     await db.query(
       `UPDATE transactions SET

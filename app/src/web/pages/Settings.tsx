@@ -1,6 +1,6 @@
 import { Anchor, Button, Card, Checkbox, Group, Select, Stack, Table, Text, TextInput, Title } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { Category } from "../api";
 import { api } from "../api";
@@ -33,6 +33,96 @@ function CategoryRow({ cat, onSaved }: { cat: Category; onSaved: () => void }) {
         }}>Save</Button>
       </Table.Td>
     </Table.Tr>
+  );
+}
+
+interface Rule {
+  id: number;
+  text_contains: string | null;
+  account: string | null;
+  amount_min: number | null;
+  amount_max: number | null;
+  category: string | null;
+  set_merchant: string | null;
+  set_tags: string[];
+  set_reviewed: boolean;
+}
+
+function describe(r: Rule): [string, string] {
+  const when = [
+    r.text_contains && `text contains "${r.text_contains}"`,
+    r.account && `account is ${r.account}`,
+    r.amount_min !== null && `amount ≥ ${r.amount_min}`,
+    r.amount_max !== null && `amount ≤ ${r.amount_max}`,
+  ].filter(Boolean);
+  const then = [
+    r.category && `category ${r.category}`,
+    r.set_merchant && `merchant ${r.set_merchant}`,
+    r.set_tags.length > 0 && `tags ${r.set_tags.join(", ")}`,
+    r.set_reviewed && "reviewed",
+  ].filter(Boolean);
+  return [when.join(" and ") || "every row", then.join(", ") || "nothing"];
+}
+
+function Rules() {
+  const { meta } = useApp();
+  const [rules, setRules] = useState<Rule[]>([]);
+  const [text, setText] = useState("");
+  const [category, setCategory] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const load = () => api<Rule[]>("/rules").then(setRules);
+  useEffect(() => {
+    load();
+  }, []);
+
+  return (
+    <Card withBorder component="section" padding="md">
+      <Title order={2} size="h4" mb="xs">Rules</Title>
+      <Text c="dimmed" size="sm" mb="sm">
+        Rules run on new rows from CSV import and bank sync. A rule never changes a row that you edited.
+      </Text>
+      <Table fz="sm" aria-label="Rules list">
+        <Table.Thead>
+          <Table.Tr><Table.Th>When</Table.Th><Table.Th>Then set</Table.Th><Table.Th /></Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
+          {rules.map((r) => {
+            const [when, then] = describe(r);
+            return (
+              <Table.Tr key={r.id}>
+                <Table.Td>{when}</Table.Td>
+                <Table.Td>{then}</Table.Td>
+                <Table.Td>
+                  <Button size="xs" variant="default" onClick={async () => {
+                    await api(`/rules/${r.id}`, undefined, "DELETE");
+                    load();
+                  }}>Delete</Button>
+                </Table.Td>
+              </Table.Tr>
+            );
+          })}
+        </Table.Tbody>
+      </Table>
+      <form onSubmit={async (e) => {
+        e.preventDefault();
+        setErr(null);
+        try {
+          await api("/rules", { text_contains: text, set_category_id: category ? Number(category) : null });
+          setText("");
+          setCategory(null);
+          load();
+        } catch (ex) {
+          setErr((ex as Error).message);
+        }
+      }}>
+        <Group gap="sm" mt="md" wrap="wrap">
+          <TextInput required label="Text contains" placeholder="STARBUCKS" value={text} onChange={(e) => setText(e.currentTarget.value)} w={200} />
+          <Select required label="Set category" searchable data={meta?.categories.map((c) => ({ value: String(c.id), label: c.name })) ?? []} value={category} onChange={setCategory} w={200} />
+          <Button type="submit" style={{ alignSelf: "flex-end" }}>Add rule</Button>
+          {err && <Text c="red" size="sm">{err}</Text>}
+        </Group>
+      </form>
+    </Card>
   );
 }
 
@@ -88,6 +178,8 @@ export function Settings() {
           </Group>
         </form>
       </Card>
+
+      <Rules />
 
       <Card withBorder component="section" padding="md">
         <Title order={2} size="h4" mb="xs">Your data</Title>
