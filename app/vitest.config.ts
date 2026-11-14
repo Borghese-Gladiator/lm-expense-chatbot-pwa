@@ -12,5 +12,5 @@ export default defineConfig({
       },
     ],
   },
-  test: { dir: "..", include: ["app/tests/**/*.test.ts", ".awb-proof/**/*.test.ts"], testTimeout: 20_000 },
+  test: { dir: fileURLToPath(new URL("..", import.meta.url)), include: ["app/tests/**/*.test.ts", ".awb-proof/**/*.test.ts"], testTimeout: 20_000 },
 });

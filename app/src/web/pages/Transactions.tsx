@@ -14,19 +14,20 @@ export function Transactions() {
   const [filters, setFilters] = useState<Filters>({ include_pending: true, include_excluded_categories: true });
   const [flags, setFlags] = useState({ uncategorized: false, unreviewed: false });
   const [sort, setSort] = useState<{ sort: string; desc: boolean }>({ sort: "date", desc: true });
-  const [offset, setOffset] = useState(0);
+  const [cursors, setCursors] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [adding, setAdding] = useState(false);
   const [bulkCat, setBulkCat] = useState<string | null>(null);
 
-  const body = { filters, ...flags, ...sort, offset, limit: PAGE };
+  const page = cursors.length;
+  const body = { filters, ...flags, ...sort, cursor: cursors[page - 1] ?? null, limit: PAGE };
   const { data, error, loading } = useAsync(
-    () => api<{ items: Txn[]; total: number; sum: number }>("/transactions/search", body),
+    () => api<{ items: Txn[]; next_cursor: string | null; total: number; sum: number }>("/transactions/search", body),
     [JSON.stringify(body), version],
   );
 
   const setF = (p: Partial<Filters>) => {
-    setOffset(0);
+    setCursors([]);
     setFilters({ ...filters, ...p });
   };
   const toggle = (id: number) => {
@@ -107,11 +108,11 @@ export function Transactions() {
                 { value: "merchant:false", label: "Merchant A–Z" },
               ]}
               value={`${sort.sort}:${sort.desc}`}
-              onChange={(v) => { if (!v) return; const [s, d] = v.split(":"); setSort({ sort: s, desc: d === "true" }); }}
+              onChange={(v) => { if (!v) return; const [s, d] = v.split(":"); setCursors([]); setSort({ sort: s, desc: d === "true" }); }}
               w={190}
             />
-            <Checkbox label="Uncategorized" checked={flags.uncategorized} onChange={(e) => { setOffset(0); setFlags({ ...flags, uncategorized: e.currentTarget.checked }); }} />
-            <Checkbox label="Unreviewed" checked={flags.unreviewed} onChange={(e) => { setOffset(0); setFlags({ ...flags, unreviewed: e.currentTarget.checked }); }} />
+            <Checkbox label="Uncategorized" checked={flags.uncategorized} onChange={(e) => { setCursors([]); setFlags({ ...flags, uncategorized: e.currentTarget.checked }); }} />
+            <Checkbox label="Unreviewed" checked={flags.unreviewed} onChange={(e) => { setCursors([]); setFlags({ ...flags, unreviewed: e.currentTarget.checked }); }} />
           </Group>
           {selected.size > 0 && (
             <Group gap="sm" wrap="wrap">
@@ -133,9 +134,9 @@ export function Transactions() {
             <>
               <TransactionTable items={data.items} onRowClick={(t) => openTxn(t.id)} selected={selected} onToggle={toggle} />
               <Group justify="center" gap="md">
-                <Button variant="subtle" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))}>← Previous</Button>
-                <Text c="dimmed" size="sm">{offset + 1}–{Math.min(offset + PAGE, data.total)} of {data.total}</Text>
-                <Button variant="subtle" disabled={offset + PAGE >= data.total} onClick={() => setOffset(offset + PAGE)}>Next →</Button>
+                <Button variant="subtle" disabled={page === 0} onClick={() => setCursors(cursors.slice(0, -1))}>← Previous</Button>
+                <Text c="dimmed" size="sm">{page * PAGE + 1}–{page * PAGE + data.items.length} of {data.total}</Text>
+                <Button variant="subtle" disabled={!data.next_cursor} onClick={() => setCursors([...cursors, data.next_cursor!])}>Next →</Button>
               </Group>
             </>
           )}

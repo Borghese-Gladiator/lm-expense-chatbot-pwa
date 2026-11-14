@@ -65,6 +65,27 @@ it("returns the right error codes", async () => {
   expect((await call("GET", "nope")).status).toBe(404);
 });
 
+it.each(["date", "amount", "merchant"])("pages by cursor with sort %s and no repeats", async (sort) => {
+  const acct = (await post("accounts", { name: "Cash" })).id;
+  for (let i = 0; i < 25; i++)
+    await post("transactions", { account_id: acct, date: `2026-10-0${(i % 3) + 1}`, amount: -(i % 4), payee: `P${i % 2}` });
+  const seen: number[] = [];
+  let cursor: string | null = null;
+  for (let n = 0; n < 5; n++) {
+    const r = await post("transactions/search", { sort, limit: 10, cursor });
+    seen.push(...r.items.map((t: { id: number }) => t.id));
+    cursor = r.next_cursor;
+    if (!cursor) break;
+  }
+  expect(cursor).toBeNull();
+  expect(new Set(seen).size).toBe(25);
+  expect(seen).toHaveLength(25);
+});
+
+it("rejects a bad cursor", async () => {
+  expect((await call("POST", "transactions/search", { cursor: "nope" })).status).toBe(422);
+});
+
 it("syncs no items on cron with no connections", async () => {
   expect(await (await call("GET", "cron/sync")).json()).toEqual({ items: [] });
 });
