@@ -24,6 +24,6 @@ it("ships no service worker that could cache /api/ responses", () => {
 
 it("answers an unsigned /api/ request from the server, never from a cache", async () => {
   const { authorize } = await import("@/auth");
-  const res = await authorize(new Request("http://test/api/accounts"), { APP_PASSWORD: "x" } as NodeJS.ProcessEnv);
+  const res = await authorize(new Request("http://test/api/accounts"), { APP_PASSWORD: "x" } as unknown as NodeJS.ProcessEnv);
   expect(res?.status).toBe(401);
 });
