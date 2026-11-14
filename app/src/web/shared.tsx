@@ -1,4 +1,5 @@
 import { Alert, Badge, Button, Center, Checkbox, Drawer, Group, Loader, Table, Text, Title } from "@mantine/core";
+import { useMediaQuery } from "@mantine/hooks";
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 
 import type { Drill, Meta, Txn } from "./api";
@@ -62,17 +63,18 @@ export function TransactionTable({
   onToggle?: (id: number) => void;
   extra?: (t: Txn) => React.ReactNode;
 }) {
+  const mobile = !!useMediaQuery("(max-width: 47.99em)");
   return (
-    <Table.ScrollContainer minWidth={600}>
+    <Table.ScrollContainer minWidth={mobile ? 0 : 600}>
       <Table highlightOnHover={!!onRowClick} fz="sm">
         <Table.Thead>
           <Table.Tr>
             {onToggle && <Table.Th aria-label="Select" />}
             <Table.Th>Date</Table.Th>
             <Table.Th>Merchant</Table.Th>
-            <Table.Th>Category</Table.Th>
-            <Table.Th>Account</Table.Th>
-            <Table.Th>Tags</Table.Th>
+            {!mobile && <Table.Th>Category</Table.Th>}
+            {!mobile && <Table.Th>Account</Table.Th>}
+            {!mobile && <Table.Th>Tags</Table.Th>}
             <Table.Th ta="right">Amount</Table.Th>
             {extra && <Table.Th />}
           </Table.Tr>
@@ -95,11 +97,13 @@ export function TransactionTable({
                 {t.is_pending && <Badge variant="outline" color="gray" size="xs" ml={6}>pending</Badge>}
                 {t.txn_type === "transfer" && <Badge variant="outline" color="gray" size="xs" ml={6}>transfer</Badge>}
               </Table.Td>
-              <Table.Td>{t.category}</Table.Td>
-              <Table.Td c="dimmed">{t.account}</Table.Td>
-              <Table.Td>
-                <Group gap={4}>{t.tags.map((g) => <Badge key={g} variant="light" size="xs">{g}</Badge>)}</Group>
-              </Table.Td>
+              {!mobile && <Table.Td>{t.category}</Table.Td>}
+              {!mobile && <Table.Td c="dimmed">{t.account}</Table.Td>}
+              {!mobile && (
+                <Table.Td>
+                  <Group gap={4}>{t.tags.map((g) => <Badge key={g} variant="light" size="xs">{g}</Badge>)}</Group>
+                </Table.Td>
+              )}
               <Table.Td ta="right"><Amount v={t.amount} /></Table.Td>
               {extra && <Table.Td onClick={(e) => e.stopPropagation()}>{extra(t)}</Table.Td>}
             </Table.Tr>
@@ -112,6 +116,7 @@ export function TransactionTable({
 
 export function DrilldownDrawer({ drill, onClose }: { drill: Drill; onClose: () => void }) {
   const { openTxn, version } = useApp();
+  const mobile = !!useMediaQuery("(max-width: 47.99em)");
   const [query, setQuery] = useState(drill.query);
   useEffect(() => setQuery(drill.query), [drill]);
   const { data, error, loading } = useAsync(
@@ -135,6 +140,7 @@ export function DrilldownDrawer({ drill, onClose }: { drill: Drill; onClose: () 
       onClose={onClose}
       position="right"
       size="xl"
+      fullScreen={mobile}
       closeButtonProps={{ "aria-label": "Close" }}
       title={
         <div>
