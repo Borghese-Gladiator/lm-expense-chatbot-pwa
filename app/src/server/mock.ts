@@ -152,6 +152,11 @@ export async function seedDemo(db: Db): Promise<number> {
        VALUES ('mock-item', 'Mock Bank', ?, 'ok', NULL), ('mock-item-2', 'Mock Credit Union', ?, 'reconnect', 'ITEM_LOGIN_REQUIRED: x')`,
       [token, token],
     );
+    await tx.query(
+      `INSERT INTO accounts (name, type, institution, source, source_id, plaid_item_id)
+       VALUES ('Mock Bank Checking', 'checking', 'Mock Bank', 'plaid', 'mock-chk', (SELECT id FROM plaid_items WHERE item_id = 'mock-item')),
+              ('Checking (CSV)', 'checking', NULL, 'csv', NULL, NULL)`,
+    );
   });
   return rows.length;
 }

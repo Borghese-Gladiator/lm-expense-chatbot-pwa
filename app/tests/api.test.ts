@@ -96,3 +96,14 @@ describe("authorize", () => {
     expect(authorize(req(path, auth), env as NodeJS.ProcessEnv)?.status ?? null).toBe(status);
   });
 });
+
+it("merges a Plaid account into a CSV account", async () => {
+  const csv = (await post("accounts", { name: "CSV Checking" })).id;
+  await ctx.db.query("INSERT INTO accounts (name, source, source_id) VALUES ('Plaid Checking', 'plaid', 'acc1')");
+  const pl = (await ctx.db.query<{ id: number }>("SELECT id FROM accounts WHERE source_id = 'acc1'"))[0].id;
+  await post("transactions", { account_id: pl, date: "2026-10-01", amount: -3, payee: "X" });
+  expect((await call("POST", `accounts/${pl}/merge`, { into_id: pl })).status).toBe(400);
+  expect((await call("POST", `accounts/${pl}/merge`, { into_id: csv })).status).toBe(200);
+  expect(await ctx.db.query("SELECT id, source, source_id FROM accounts")).toEqual([{ id: csv, source: "plaid", source_id: "acc1" }]);
+  expect(await ctx.db.query("SELECT account_id FROM transactions")).toEqual([{ account_id: csv }]);
+});
