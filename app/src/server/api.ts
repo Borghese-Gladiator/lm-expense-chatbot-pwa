@@ -15,7 +15,7 @@ import { loadSettings, type Settings } from "./config";
 import { CsvImportSchema, importCsv } from "./csv";
 import { one, openDb, scalar, type Db, type Row } from "./db";
 import * as plaid from "./plaid";
-import { createRule, RuleIn } from "./rules";
+import { applyRule, createRule, previewRule, RuleIn, undoExecution } from "./rules";
 
 export interface Ctx {
   db: Db;
@@ -492,6 +492,20 @@ const ROUTES: [string, string, Handler][] = [
       ),
   ],
   ["POST", "rules", async ({ db }, { body }) => ({ id: await createRule(db, RuleIn.parse(body)) })],
+  ["POST", "rules/:id/preview", async ({ db }, { params }) => {
+    const rows = await previewRule(db, id(params[0]));
+    return { count: rows.length, items: rows };
+  }],
+  ["POST", "rules/:id/apply", async ({ db }, { params }) => {
+    const rid = id(params[0]);
+    if (!(await one(db, "SELECT 1 FROM rules WHERE id = ?", [rid]))) throw new HttpError(404, "rule not found");
+    return applyRule(db, rid);
+  }],
+  ["POST", "rule-executions/:id/undo", async ({ db }, { params }) => {
+    const out = await undoExecution(db, id(params[0]));
+    if (!out) throw new HttpError(404, "execution not found");
+    return out;
+  }],
   [
     "DELETE",
     "rules/:id",
@@ -506,7 +520,7 @@ const ROUTES: [string, string, Handler][] = [
     "data/delete-all",
     async ({ db }) => {
       await db.query(
-        "TRUNCATE not_duplicates, rules, transactions, accounts, categories, plaid_items, sync_runs, saved_queries, idempotency_keys RESTART IDENTITY",
+        "TRUNCATE not_duplicates, rule_executions, rules, transactions, accounts, categories, plaid_items, sync_runs, saved_queries, idempotency_keys RESTART IDENTITY",
       );
       return { ok: true };
     },

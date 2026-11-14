@@ -65,8 +65,10 @@ function describe(r: Rule): [string, string] {
 }
 
 function Rules() {
-  const { meta } = useApp();
+  const { meta, bump } = useApp();
   const [rules, setRules] = useState<Rule[]>([]);
+  const [status, setStatus] = useState<Record<number, string>>({});
+  const [execs, setExecs] = useState<Record<number, number>>({});
   const [text, setText] = useState("");
   const [category, setCategory] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -93,10 +95,31 @@ function Rules() {
                 <Table.Td>{when}</Table.Td>
                 <Table.Td>{then}</Table.Td>
                 <Table.Td>
-                  <Button size="xs" variant="default" onClick={async () => {
-                    await api(`/rules/${r.id}`, undefined, "DELETE");
-                    load();
-                  }}>Delete</Button>
+                  <Group gap="xs" wrap="wrap">
+                    <Button size="xs" variant="default" onClick={async () => {
+                      const p = await api<{ count: number }>(`/rules/${r.id}/preview`, {});
+                      setStatus((s) => ({ ...s, [r.id]: `${p.count} matching ${p.count === 1 ? "row" : "rows"}` }));
+                    }}>Preview</Button>
+                    <Button size="xs" onClick={async () => {
+                      const a = await api<{ execution_id: number; changed: number }>(`/rules/${r.id}/apply`, {});
+                      setExecs((e) => ({ ...e, [r.id]: a.execution_id }));
+                      setStatus((s) => ({ ...s, [r.id]: `Changed ${a.changed} ${a.changed === 1 ? "row" : "rows"}` }));
+                      bump();
+                    }}>Apply to past transactions</Button>
+                    {execs[r.id] && (
+                      <Button size="xs" variant="default" onClick={async () => {
+                        const u = await api<{ restored: number }>(`/rule-executions/${execs[r.id]}/undo`, {});
+                        setExecs(({ [r.id]: _, ...rest }) => rest);
+                        setStatus((s) => ({ ...s, [r.id]: `Restored ${u.restored} ${u.restored === 1 ? "row" : "rows"}` }));
+                        bump();
+                      }}>Undo</Button>
+                    )}
+                    <Button size="xs" variant="default" onClick={async () => {
+                      await api(`/rules/${r.id}`, undefined, "DELETE");
+                      load();
+                    }}>Delete</Button>
+                    {status[r.id] && <Text size="sm" role="status">{status[r.id]}</Text>}
+                  </Group>
                 </Table.Td>
               </Table.Tr>
             );
