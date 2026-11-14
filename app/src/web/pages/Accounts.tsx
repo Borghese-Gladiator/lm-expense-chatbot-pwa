@@ -1,4 +1,4 @@
-import { Alert, Button, Card, FileInput, Group, Select, Stack, Table, Text, TextInput, Title } from "@mantine/core";
+import { Alert, Button, Card, FileInput, Group, Modal, Select, Stack, Table, Text, TextInput, Title } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useState } from "react";
 
@@ -53,6 +53,8 @@ export function Accounts() {
   const runs = useAsync(() => api<SyncRun[]>("/sync-runs"), [version]);
   const [msg, setMsg] = useState<{ text: string; error?: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [merge, setMerge] = useState<{ id: number; name: string } | null>(null);
+  const [mergeInto, setMergeInto] = useState<string | null>(null);
 
   const refresh = async () => {
     await reloadMeta();
@@ -176,11 +178,16 @@ export function Accounts() {
                     <Table.Td ta="right" style={NUM}>{a.txn_count}</Table.Td>
                     <Table.Td ta="right" style={NUM}>{a.balance == null ? "—" : money2(a.balance)}</Table.Td>
                     <Table.Td ta="right">
+                      <Group gap="xs" justify="flex-end" wrap="nowrap">
+                      {a.source === "plaid" && (
+                        <Button size="xs" variant="default" onClick={() => { setMerge(a); setMergeInto(null); }}>Merge into…</Button>
+                      )}
                       <Button size="xs" variant="subtle" color="red" onClick={async () => {
                         if (!confirm(`Delete ${a.name} and all ${a.txn_count} of its transactions? You cannot undo this.`)) return;
                         await api(`/accounts/${a.id}`, undefined, "DELETE");
                         refresh();
                       }}>Delete</Button>
+                      </Group>
                     </Table.Td>
                   </Table.Tr>
                 ))}
@@ -190,6 +197,30 @@ export function Accounts() {
         )}
         <AddAccount onDone={refresh} />
       </Section>
+
+      <Modal opened={merge !== null} onClose={() => setMerge(null)} title={`Merge ${merge?.name ?? ""} into another account`}>
+        <Stack gap="sm">
+          <Text size="sm">All transactions move to the account you pick. Future bank syncs add rows to it. Then {merge?.name} is deleted.</Text>
+          <Select
+            label="Merge into"
+            placeholder="Pick an account"
+            data={(meta?.accounts ?? []).filter((a) => a.id !== merge?.id && a.source !== "plaid").map((a) => ({ value: String(a.id), label: a.name }))}
+            value={mergeInto}
+            onChange={setMergeInto}
+          />
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setMerge(null)}>Cancel</Button>
+            <Button disabled={!mergeInto || busy} onClick={() => {
+              const from = merge!;
+              setMerge(null);
+              run("Merging", async () => {
+                await api(`/accounts/${from.id}/merge`, { into_id: Number(mergeInto) });
+                return `Merged ${from.name}.`;
+              });
+            }}>Merge</Button>
+          </Group>
+        </Stack>
+      </Modal>
 
       <CsvImport onDone={refresh} />
 

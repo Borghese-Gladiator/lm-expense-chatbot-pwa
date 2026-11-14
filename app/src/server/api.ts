@@ -73,6 +73,7 @@ const AccountIn = z.object({
   balance: z.number().nullish(),
 });
 const AccountPatch = z.object({ name: z.string().nullish(), archived: z.boolean().nullish() });
+const MergeIn = z.object({ into_id: z.number().int() });
 const CategoryIn = z.object({
   name: z.string().min(1),
   group_name: z.string().nullish(),
@@ -356,6 +357,30 @@ const ROUTES: [string, string, Handler][] = [
           ...fields.map(([, v]) => v),
           id(params[0]),
         ]);
+      return { ok: true };
+    },
+  ],
+  [
+    "POST",
+    "accounts/:id/merge",
+    async ({ db }, { params, body }) => {
+      const from = id(params[0]);
+      const { into_id } = MergeIn.parse(body);
+      if (from === into_id) throw new HttpError(400, "cannot merge an account into itself");
+      await db.tx(async (t) => {
+        const src = await one(t, "SELECT source, source_id, plaid_item_id FROM accounts WHERE id = ?", [from]);
+        if (!src || (await scalar(t, "SELECT COUNT(*) FROM accounts WHERE id = ?", [into_id])) === 0)
+          throw new HttpError(404, "account not found");
+        await t.query("UPDATE transactions SET account_id = ? WHERE account_id = ?", [into_id, from]);
+        await t.query("DELETE FROM accounts WHERE id = ?", [from]);
+        if (src.source_id !== null)
+          await t.query("UPDATE accounts SET source = ?, source_id = ?, plaid_item_id = ? WHERE id = ?", [
+            src.source,
+            src.source_id,
+            src.plaid_item_id,
+            into_id,
+          ]);
+      });
       return { ok: true };
     },
   ],
