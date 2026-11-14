@@ -22,6 +22,7 @@ const DIMENSIONS = [
   "type",
   "day_of_week",
   "weekend",
+  "month_of_year",
 ] as const;
 type Dimension = (typeof DIMENSIONS)[number];
 type Measure = "spending" | "income" | "net";
@@ -40,6 +41,7 @@ export const DIM_SQL: Record<Dimension, string> = {
   tag: "tag",
   type: "txn_type",
   day_of_week: "to_char(date, 'ID Dy')",
+  month_of_year: "to_char(date, 'MM')",
   weekend: "CASE WHEN extract(isodow FROM date) IN (6, 7) THEN 'Weekend' ELSE 'Weekday' END",
 };
 
@@ -192,7 +194,7 @@ function aggregateSql(q: AnalyticsQuery, f: Filters): [string, unknown[]] {
     value_asc: "value ASC NULLS LAST",
     dimension: names.join(", ") || "value",
   }[q.sort];
-  if ((dims.length && TIME_DIMS.has(q.dimensions[0])) || q.metric === "cumulative") order = names.join(", ");
+  if ((dims.length && (TIME_DIMS.has(q.dimensions[0]) || q.dimensions[0] === "month_of_year")) || q.metric === "cumulative") order = names.join(", ");
 
   const sql =
     `SELECT ${[...names, `${outerValue} AS value`, "n"].join(", ")} ` +

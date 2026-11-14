@@ -107,7 +107,7 @@ export function Chart({ rows, dimensions, metric, kind, height = 320, horizontal
       };
     } else if (dim1 && (resolved === "stacked_bar" || resolved === "line" || resolved === "area" || resolved === "bar")) {
       const xs = [...new Set(rows.map((r) => r.d0!))];
-      if (TIME_DIMS.includes(dim0)) xs.sort();
+      if (TIME_DIMS.includes(dim0) || dim0 === "month_of_year") xs.sort();
       const totals = new Map<string, number>();
       rows.forEach((r) => totals.set(r.d1!, (totals.get(r.d1!) ?? 0) + Math.abs(r.value ?? 0)));
       const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k);
