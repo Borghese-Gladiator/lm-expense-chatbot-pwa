@@ -140,7 +140,7 @@ export function Chart({ rows, dimensions, metric, kind, height = 320, horizontal
           splitLine: { lineStyle: { color: t.grid } },
         },
         series: names.map((name) => ({
-          name,
+          name: name === "Other" ? name : dimValue(dim1, name),
           type: resolved === "line" || resolved === "area" ? "line" : "bar",
           stack: stacked ? "s" : undefined,
           barMaxWidth: 24,
