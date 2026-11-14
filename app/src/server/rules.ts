@@ -5,9 +5,11 @@
  */
 import { z } from "zod";
 
+import { withHistory } from "./history";
 import { one, type Db, type Row } from "./db";
 
 export const RuleIn = z.object({
+  name: z.string().trim().min(1).nullish(),
   text_contains: z.string().trim().min(1).nullish(),
   account_id: z.number().int().nullish(),
   amount_min: z.number().nullish(),
@@ -35,9 +37,10 @@ const SET = `category_id = COALESCE(r.set_category_id, t.category_id),
 export async function createRule(db: Db, rule: z.input<typeof RuleIn>): Promise<number> {
   const r = RuleIn.parse(rule);
   const rows = await db.query<{ id: number }>(
-    `INSERT INTO rules (text_contains, account_id, amount_min, amount_max, set_category_id, set_merchant, set_tags, set_reviewed)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+    `INSERT INTO rules (name, text_contains, account_id, amount_min, amount_max, set_category_id, set_merchant, set_tags, set_reviewed)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
     [
+      r.name ?? null,
       r.text_contains ?? null,
       r.account_id ?? null,
       r.amount_min ?? null,
@@ -51,11 +54,18 @@ export async function createRule(db: Db, rule: z.input<typeof RuleIn>): Promise<
   return Number(rows[0].id);
 }
 
+export async function ruleName(db: Db, id: number): Promise<string> {
+  const r = await one<{ name: string | null; text_contains: string | null }>(db, "SELECT name, text_contains FROM rules WHERE id = ?", [id]);
+  return r?.name || r?.text_contains || `Rule #${id}`;
+}
+
 export async function applyRules(db: Db, ids: number[]): Promise<void> {
   if (!ids.length) return;
   const rules = await db.query<{ id: number }>("SELECT id FROM rules ORDER BY id");
   for (const { id } of rules)
-    await db.query(`UPDATE transactions t SET ${SET} FROM rules r WHERE r.id = ? AND t.id = ANY(?::bigint[]) AND ${MATCH}`, [id, ids]);
+    await withHistory(db, ids, "Rule", await ruleName(db, id), async () => {
+      await db.query(`UPDATE transactions t SET ${SET} FROM rules r WHERE r.id = ? AND t.id = ANY(?::bigint[]) AND ${MATCH}`, [id, ids]);
+    });
 }
 
 export const previewRule = (db: Db, ruleId: number): Promise<Row[]> =>
@@ -78,10 +88,10 @@ export const applyRule = (db: Db, ruleId: number) =>
       "INSERT INTO rule_executions (rule_id, old_values) VALUES (?, ?) RETURNING id",
       [ruleId, JSON.stringify(old)],
     );
-    await t.query(`UPDATE transactions t SET ${SET} FROM rules r WHERE r.id = ? AND t.id = ANY(?::bigint[])`, [
-      ruleId,
-      old.map((o) => o.id),
-    ]);
+    const oldIds = old.map((o) => Number(o.id));
+    await withHistory(t, oldIds, "Rule", await ruleName(t, ruleId), async () => {
+      await t.query(`UPDATE transactions t SET ${SET} FROM rules r WHERE r.id = ? AND t.id = ANY(?::bigint[])`, [ruleId, oldIds]);
+    });
     return { execution_id: Number(exec!.id), changed: old.length };
   });
 
