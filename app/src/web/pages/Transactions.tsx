@@ -1,4 +1,4 @@
-import { Alert, Button, Card, Checkbox, Group, NumberInput, Select, Stack, Text, TextInput, Title } from "@mantine/core";
+import { Alert, Button, Card, Checkbox, Group, NumberInput, Select, Stack, Table, Text, TextInput, Title } from "@mantine/core";
 import { DatePickerInput, DateInput } from "@mantine/dates";
 import { useState } from "react";
 
@@ -17,6 +17,7 @@ export function Transactions() {
   const [cursors, setCursors] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [adding, setAdding] = useState(false);
+  const [dupes, setDupes] = useState(false);
   const [bulkCat, setBulkCat] = useState<string | null>(null);
 
   const page = cursors.length;
@@ -62,11 +63,13 @@ export function Transactions() {
       <Group justify="space-between" wrap="wrap">
         <Title order={1} size="h2">Transactions</Title>
         <Group gap="sm">
+          <Button variant="default" onClick={() => setDupes(!dupes)}>{dupes ? "Hide possible duplicates" : "Possible duplicates"}</Button>
           <Button variant="default" onClick={exportCsv}>Export CSV</Button>
           <Button onClick={() => setAdding(!adding)}>{adding ? "Cancel" : "Add transaction"}</Button>
         </Group>
       </Group>
       {adding && <AddTxn onDone={() => { setAdding(false); bump(); }} />}
+      {dupes && <Duplicates />}
       <Card withBorder component="section" padding="md">
         <Stack gap="sm">
           <Group gap="sm" wrap="wrap" align="center">
@@ -143,6 +146,72 @@ export function Transactions() {
         </Stack>
       </Card>
     </Stack>
+  );
+}
+
+interface Pair {
+  plaid_id: number;
+  csv_id: number;
+  account: string;
+  amount: number;
+  plaid_date: string;
+  csv_date: string;
+  plaid_payee: string | null;
+  csv_payee: string | null;
+}
+
+function Duplicates() {
+  const { version, bump } = useApp();
+  const { data, error, loading } = useAsync(() => api<Pair[]>("/duplicates"), [version]);
+  const [err, setErr] = useState<string | null>(null);
+  const resolve = async (keep: number, remove: number, not_duplicate = false) => {
+    setErr(null);
+    try {
+      await api("/duplicates/resolve", { keep, remove, not_duplicate });
+      bump();
+    } catch (ex) {
+      setErr((ex as Error).message);
+    }
+  };
+  return (
+    <Card withBorder component="section" padding="md" aria-labelledby="dupes-title">
+      <Stack gap="sm">
+        <Title order={2} size="h4" id="dupes-title">Possible duplicates</Title>
+        <Text c="dimmed" size="sm">A bank row and a CSV row on one account with the same amount, at most 3 days apart.</Text>
+        <LoadState loading={loading && !data} error={error} empty={data?.length === 0} />
+        {err && <Text c="red" size="sm">{err}</Text>}
+        {data && data.length > 0 && (
+          <Table>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Account</Table.Th>
+                <Table.Th>Bank row</Table.Th>
+                <Table.Th>CSV row</Table.Th>
+                <Table.Th ta="right">Amount</Table.Th>
+                <Table.Th>Action</Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {data.map((p) => (
+                <Table.Tr key={`${p.plaid_id}-${p.csv_id}`}>
+                  <Table.Td>{p.account}</Table.Td>
+                  <Table.Td>{p.plaid_date} · {p.plaid_payee}</Table.Td>
+                  <Table.Td>{p.csv_date} · {p.csv_payee}</Table.Td>
+                  <Table.Td ta="right" style={{ fontVariantNumeric: "tabular-nums" }}>{money2(p.amount)}</Table.Td>
+                  <Table.Td>
+                    <Group gap="xs" wrap="wrap">
+                      <Button size="xs" variant="default" onClick={() => resolve(p.plaid_id, p.csv_id)}>Keep bank row</Button>
+                      <Button size="xs" variant="default" onClick={() => resolve(p.csv_id, p.plaid_id)}>Keep CSV row</Button>
+                      <Button size="xs" variant="subtle" onClick={() => resolve(p.plaid_id, p.csv_id, true)}>Not a duplicate</Button>
+                    </Group>
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        )}
+      </Stack>
+    </Card>
   );
 }
 

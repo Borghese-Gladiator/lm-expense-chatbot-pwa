@@ -151,3 +151,36 @@ describe("authorize", () => {
     expect(out.headers.get("set-cookie")).toMatch(/^sl_session=;.*Max-Age=0/);
   });
 });
+
+it("finds and resolves possible duplicates", async () => {
+  const [a, b] = [(await post("accounts", { name: "A" })).id, (await post("accounts", { name: "B" })).id];
+  const add = async (source: string, account: number, date: string) =>
+    (await ctx.db.query<{ id: number }>(
+      "INSERT INTO transactions (source, account_id, date, amount) VALUES (?, ?, ?, -10) RETURNING id",
+      [source, account, date],
+    ))[0].id;
+  const p = await add("plaid", a, "2026-10-01");
+  const c = await add("csv", a, "2026-10-04");
+  await add("csv", a, "2026-10-05");
+  await add("csv", b, "2026-10-01");
+  const pairs = async () => (await (await call("GET", "duplicates")).json()).map((r: { plaid_id: number; csv_id: number }) => [r.plaid_id, r.csv_id]);
+  expect(await pairs()).toEqual([[p, c]]);
+  await post("duplicates/resolve", { keep: p, remove: c, not_duplicate: true });
+  expect(await pairs()).toEqual([]);
+  const c2 = await add("csv", a, "2026-09-30");
+  expect(await pairs()).toEqual([[p, c2]]);
+  await post("duplicates/resolve", { keep: c2, remove: p });
+  expect(await ctx.db.query("SELECT id FROM transactions WHERE id = ?", [p])).toEqual([]);
+  expect(await pairs()).toEqual([]);
+});
+
+it("merges a Plaid account into a CSV account", async () => {
+  const csv = (await post("accounts", { name: "CSV Checking" })).id;
+  await ctx.db.query("INSERT INTO accounts (name, source, source_id) VALUES ('Plaid Checking', 'plaid', 'acc1')");
+  const pl = (await ctx.db.query<{ id: number }>("SELECT id FROM accounts WHERE source_id = 'acc1'"))[0].id;
+  await post("transactions", { account_id: pl, date: "2026-10-01", amount: -3, payee: "X" });
+  expect((await call("POST", `accounts/${pl}/merge`, { into_id: pl })).status).toBe(400);
+  expect((await call("POST", `accounts/${pl}/merge`, { into_id: csv })).status).toBe(200);
+  expect(await ctx.db.query("SELECT id, source, source_id FROM accounts")).toEqual([{ id: csv, source: "plaid", source_id: "acc1" }]);
+  expect(await ctx.db.query("SELECT account_id FROM transactions")).toEqual([{ account_id: csv }]);
+});

@@ -1,4 +1,4 @@
-import { Alert, Button, Card, FileInput, Group, Select, Stack, Table, Text, TextInput, Title } from "@mantine/core";
+import { Alert, Button, Card, FileInput, Group, Modal, Select, Stack, Table, Text, TextInput, Title } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useState } from "react";
 
@@ -11,6 +11,7 @@ interface PlaidItem {
   institution: string | null;
   status: string;
   error: string | null;
+  last_synced_at: string | null;
 }
 interface SyncRun {
   id: number;
@@ -52,6 +53,8 @@ export function Accounts() {
   const runs = useAsync(() => api<SyncRun[]>("/sync-runs"), [version]);
   const [msg, setMsg] = useState<{ text: string; error?: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [merge, setMerge] = useState<{ id: number; name: string } | null>(null);
+  const [mergeInto, setMergeInto] = useState<string | null>(null);
 
   const refresh = async () => {
     await reloadMeta();
@@ -95,6 +98,20 @@ export function Accounts() {
       });
     });
 
+  const reconnect = (id: number) =>
+    run("Opening Plaid", async () => {
+      const { link_token } = await api<{ link_token: string }>(`/plaid/items/${id}/link-token`, {});
+      if (link_token !== "mock-link-token") {
+        await loadPlaid();
+        const ok = await new Promise<boolean>((resolve) =>
+          window.Plaid!.create({ token: link_token, onSuccess: () => resolve(true), onExit: () => resolve(false) }).open(),
+        );
+        if (!ok) return "Plaid closed.";
+      }
+      await api(`/plaid/items/${id}/reconnected`, {});
+      return "Reconnected.";
+    });
+
   const syncItem = (id: number) =>
     run("Syncing", async () => {
       const r = await api<{ added: number; modified: number; removed: number }>(`/plaid/items/${id}/sync`, {});
@@ -123,8 +140,16 @@ export function Accounts() {
                   <Table.Td c={it.status === "ok" ? "dimmed" : "red"}>
                     {it.status === "ok" ? "Connected" : it.status === "reconnect" ? "Sign-in needed: connect again" : it.error}
                   </Table.Td>
+                  <Table.Td c="dimmed" style={NUM}>
+                    Last sync: {it.last_synced_at ? new Date(it.last_synced_at).toLocaleString() : "Never"}
+                  </Table.Td>
                   <Table.Td ta="right">
-                    <Button size="xs" variant="default" disabled={busy} onClick={() => syncItem(it.id)}>Sync now</Button>
+                    <Group gap="xs" justify="flex-end" wrap="nowrap">
+                      {it.status === "reconnect" && (
+                        <Button size="xs" disabled={busy} onClick={() => reconnect(it.id)}>Reconnect</Button>
+                      )}
+                      <Button size="xs" variant="default" disabled={busy} onClick={() => syncItem(it.id)}>Sync now</Button>
+                    </Group>
                   </Table.Td>
                 </Table.Tr>
               ))}
@@ -136,12 +161,12 @@ export function Accounts() {
       <Section title="Accounts">
         <LoadState empty={meta?.accounts.length === 0} emptyText="No accounts yet." />
         {meta && meta.accounts.length > 0 && (
-          <Table.ScrollContainer minWidth={560}>
+          <Table.ScrollContainer minWidth={720}>
             <Table fz="sm">
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Name</Table.Th><Table.Th>Type</Table.Th><Table.Th>Source</Table.Th>
-                  <Table.Th ta="right">Transactions</Table.Th><Table.Th ta="right">Balance</Table.Th><Table.Th />
+                  <Table.Th ta="right">Transactions</Table.Th><Table.Th ta="right">Balance</Table.Th><Table.Th>History cutover</Table.Th><Table.Th />
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
@@ -152,12 +177,29 @@ export function Accounts() {
                     <Table.Td>{a.source}</Table.Td>
                     <Table.Td ta="right" style={NUM}>{a.txn_count}</Table.Td>
                     <Table.Td ta="right" style={NUM}>{a.balance == null ? "—" : money2(a.balance)}</Table.Td>
+                    <Table.Td>
+                      <TextInput
+                        type="date"
+                        size="xs"
+                        aria-label={`History cutover for ${a.name}`}
+                        defaultValue={a.history_cutover ?? ""}
+                        onChange={async (e) => {
+                          await api(`/accounts/${a.id}`, { history_cutover: e.currentTarget.value || null }, "PATCH");
+                          await reloadMeta();
+                        }}
+                      />
+                    </Table.Td>
                     <Table.Td ta="right">
+                      <Group gap="xs" justify="flex-end" wrap="nowrap">
+                      {a.source === "plaid" && (
+                        <Button size="xs" variant="default" onClick={() => { setMerge(a); setMergeInto(null); }}>Merge into…</Button>
+                      )}
                       <Button size="xs" variant="subtle" color="red" onClick={async () => {
                         if (!confirm(`Delete ${a.name} and all ${a.txn_count} of its transactions? You cannot undo this.`)) return;
                         await api(`/accounts/${a.id}`, undefined, "DELETE");
                         refresh();
                       }}>Delete</Button>
+                      </Group>
                     </Table.Td>
                   </Table.Tr>
                 ))}
@@ -167,6 +209,30 @@ export function Accounts() {
         )}
         <AddAccount onDone={refresh} />
       </Section>
+
+      <Modal opened={merge !== null} onClose={() => setMerge(null)} title={`Merge ${merge?.name ?? ""} into another account`}>
+        <Stack gap="sm">
+          <Text size="sm">All transactions move to the account you pick. Future bank syncs add rows to it. Then {merge?.name} is deleted.</Text>
+          <Select
+            label="Merge into"
+            placeholder="Pick an account"
+            data={(meta?.accounts ?? []).filter((a) => a.id !== merge?.id && a.source !== "plaid").map((a) => ({ value: String(a.id), label: a.name }))}
+            value={mergeInto}
+            onChange={setMergeInto}
+          />
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setMerge(null)}>Cancel</Button>
+            <Button disabled={!mergeInto || busy} onClick={() => {
+              const from = merge!;
+              setMerge(null);
+              run("Merging", async () => {
+                await api(`/accounts/${from.id}/merge`, { into_id: Number(mergeInto) });
+                return `Merged ${from.name}.`;
+              });
+            }}>Merge</Button>
+          </Group>
+        </Stack>
+      </Modal>
 
       <CsvImport onDone={refresh} />
 

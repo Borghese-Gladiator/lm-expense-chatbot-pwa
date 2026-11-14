@@ -7,6 +7,7 @@
 import type { Settings } from "./config";
 import { decrypt, encrypt } from "./crypto";
 import { categoryIdFor, one, scalar, type Db, type Row } from "./db";
+import { applyRules } from "./rules";
 
 const HOSTS = { sandbox: "https://sandbox.plaid.com", production: "https://production.plaid.com" };
 const MAX_RESTARTS = 3;
@@ -105,16 +106,28 @@ export class PlaidClient {
   }
 }
 
-export async function createLinkToken(client: PlaidClient): Promise<string> {
+export async function createLinkToken(client: PlaidClient, accessToken?: string): Promise<string> {
   const data = await client.post("/link/token/create", {
     client_name: "Spend Lens",
     language: "en",
     country_codes: ["US", "CA"],
     user: { client_user_id: "owner" },
-    products: ["transactions"],
-    transactions: { days_requested: 730 },
+    ...(accessToken
+      ? { access_token: accessToken }
+      : { products: ["transactions"], transactions: { days_requested: 730 } }),
   });
   return String(data.link_token);
+}
+
+export async function createUpdateLinkToken(db: Db, client: PlaidClient, itemPk: number): Promise<string | null> {
+  const enc = await scalar<string | undefined>(db, "SELECT access_token_enc FROM plaid_items WHERE id = ?", [itemPk]);
+  if (enc === undefined) return null;
+  return createLinkToken(client, decrypt(enc, client.settings.appSecretKey));
+}
+
+export async function markReconnected(db: Db, itemPk: number): Promise<boolean> {
+  const rows = await db.query("UPDATE plaid_items SET status = 'ok', error = NULL WHERE id = ? RETURNING id", [itemPk]);
+  return rows.length > 0;
 }
 
 export async function exchangePublicToken(
@@ -202,13 +215,15 @@ async function apply(db: Db, data: Awaited<ReturnType<typeof fetchAll>>): Promis
   let added = 0;
   let modified = 0;
   let removed = 0;
+  const newIds: number[] = [];
   for (const t of data.added) {
-    const account = await scalar<number | undefined>(
+    const acct = await one<{ id: number; history_cutover: string | null }>(
       db,
-      "SELECT id FROM accounts WHERE source = 'plaid' AND source_id = ?",
+      "SELECT id, history_cutover FROM accounts WHERE source = 'plaid' AND source_id = ?",
       [t.account_id],
     );
-    if (account === undefined) continue;
+    if (!acct || (acct.history_cutover && String(t.date) < acct.history_cutover)) continue;
+    const account = acct.id;
     const carry: Row | undefined = t.pending_transaction_id
       ? await one(
           db,
@@ -217,12 +232,12 @@ async function apply(db: Db, data: Awaited<ReturnType<typeof fetchAll>>): Promis
           [t.pending_transaction_id],
         )
       : undefined;
-    await db.query(
+    const ins = await db.query<{ id: number }>(
       `INSERT INTO transactions
          (source, source_id, account_id, date, amount, currency, payee_raw, merchant,
           category_id, tags, notes, type, is_pending, reviewed, user_edited, raw)
        VALUES ('plaid', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT (source, source_id) DO NOTHING`,
+       ON CONFLICT (source, source_id) DO NOTHING RETURNING id`,
       [
         t.transaction_id,
         account,
@@ -241,8 +256,10 @@ async function apply(db: Db, data: Awaited<ReturnType<typeof fetchAll>>): Promis
         JSON.stringify(t),
       ],
     );
+    newIds.push(...ins.map((r) => Number(r.id)));
     added++;
   }
+  await applyRules(db, newIds);
   for (const t of data.modified) {
     await db.query(
       `UPDATE transactions SET
@@ -307,7 +324,7 @@ async function runSync(
     counts = await db.tx(async (t) => {
       await upsertAccounts(t, itemPk, item.institution, data.accounts.length ? data.accounts : accounts);
       const c = await apply(t, data);
-      await t.query("UPDATE plaid_items SET cursor = ?, status = 'ok', error = NULL WHERE id = ?", [data.cursor, itemPk]);
+      await t.query("UPDATE plaid_items SET cursor = ?, status = 'ok', error = NULL, last_synced_at = now() WHERE id = ?", [data.cursor, itemPk]);
       return c;
     });
   } catch (e) {

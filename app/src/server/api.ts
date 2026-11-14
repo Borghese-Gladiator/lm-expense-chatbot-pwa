@@ -15,6 +15,7 @@ import { loadSettings, type Settings } from "./config";
 import { CsvImportSchema, importCsv } from "./csv";
 import { one, openDb, scalar, type Db, type Row } from "./db";
 import * as plaid from "./plaid";
+import { createRule, RuleIn } from "./rules";
 
 export interface Ctx {
   db: Db;
@@ -83,7 +84,23 @@ const AccountIn = z.object({
   currency: z.string().default("USD"),
   balance: z.number().nullish(),
 });
-const AccountPatch = z.object({ name: z.string().nullish(), archived: z.boolean().nullish() });
+const AccountPatch = z.object({
+  name: z.string().nullish(),
+  archived: z.boolean().nullish(),
+  history_cutover: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
+});
+const MergeIn = z.object({ into_id: z.number().int() });
+const ResolveIn = z.object({ keep: z.number().int(), remove: z.number().int(), not_duplicate: z.boolean().default(false) });
+const DUPLICATES = `
+  SELECT p.id AS plaid_id, c.id AS csv_id, a.name AS account, p.amount,
+         p.date AS plaid_date, c.date AS csv_date,
+         COALESCE(p.merchant, p.payee_raw) AS plaid_payee, COALESCE(c.merchant, c.payee_raw) AS csv_payee
+  FROM transactions p
+  JOIN transactions c ON c.account_id = p.account_id AND c.amount = p.amount AND abs(c.date - p.date) <= 3
+  JOIN accounts a ON a.id = p.account_id
+  WHERE p.source = 'plaid' AND c.source = 'csv'
+    AND NOT EXISTS (SELECT 1 FROM not_duplicates n WHERE n.plaid_id = p.id AND n.csv_id = c.id)
+  ORDER BY p.date DESC, p.id, c.id`;
 const CategoryIn = z.object({
   name: z.string().min(1),
   group_name: z.string().nullish(),
@@ -352,6 +369,25 @@ const ROUTES: [string, string, Handler][] = [
       return { ok: true };
     },
   ],
+  ["GET", "duplicates", async ({ db }) => db.query(DUPLICATES)],
+  [
+    "POST",
+    "duplicates/resolve",
+    async ({ db }, { body }) => {
+      const b = ResolveIn.parse(body);
+      const pair = await one<{ plaid: number; csv: number }>(
+        db,
+        `SELECT p.id AS plaid, c.id AS csv FROM transactions p, transactions c
+         WHERE p.source = 'plaid' AND c.source = 'csv' AND p.id = ANY(?::bigint[]) AND c.id = ANY(?::bigint[])`,
+        [[b.keep, b.remove], [b.keep, b.remove]],
+      );
+      if (!pair || b.keep === b.remove) throw new HttpError(404, "pair not found");
+      if (b.not_duplicate)
+        await db.query("INSERT INTO not_duplicates (plaid_id, csv_id) VALUES (?, ?) ON CONFLICT DO NOTHING", [pair.plaid, pair.csv]);
+      else await db.query("DELETE FROM transactions WHERE id = ?", [b.remove]);
+      return { ok: true };
+    },
+  ],
   [
     "POST",
     "accounts",
@@ -372,12 +408,36 @@ const ROUTES: [string, string, Handler][] = [
     "accounts/:id",
     async ({ db }, { params, body }) => {
       const b = AccountPatch.parse(body);
-      const fields = Object.entries(b).filter(([, v]) => v !== null && v !== undefined);
+      const fields = Object.entries(b).filter(([k, v]) => v !== undefined && (v !== null || k === "history_cutover"));
       if (fields.length)
         await db.query(`UPDATE accounts SET ${fields.map(([k]) => `${k} = ?`).join(", ")} WHERE id = ?`, [
           ...fields.map(([, v]) => v),
           id(params[0]),
         ]);
+      return { ok: true };
+    },
+  ],
+  [
+    "POST",
+    "accounts/:id/merge",
+    async ({ db }, { params, body }) => {
+      const from = id(params[0]);
+      const { into_id } = MergeIn.parse(body);
+      if (from === into_id) throw new HttpError(400, "cannot merge an account into itself");
+      await db.tx(async (t) => {
+        const src = await one(t, "SELECT source, source_id, plaid_item_id FROM accounts WHERE id = ?", [from]);
+        if (!src || (await scalar(t, "SELECT COUNT(*) FROM accounts WHERE id = ?", [into_id])) === 0)
+          throw new HttpError(404, "account not found");
+        await t.query("UPDATE transactions SET account_id = ? WHERE account_id = ?", [into_id, from]);
+        await t.query("DELETE FROM accounts WHERE id = ?", [from]);
+        if (src.source_id !== null)
+          await t.query("UPDATE accounts SET source = ?, source_id = ?, plaid_item_id = ? WHERE id = ?", [
+            src.source,
+            src.source_id,
+            src.plaid_item_id,
+            into_id,
+          ]);
+      });
       return { ok: true };
     },
   ],
@@ -421,13 +481,32 @@ const ROUTES: [string, string, Handler][] = [
     "import/csv",
     async ({ db, settings }, { body }) => importCsv(db, CsvImportSchema.parse(body), settings.currency),
   ],
+  [
+    "GET",
+    "rules",
+    async ({ db }) =>
+      db.query(
+        `SELECT r.*, a.name AS account, c.name AS category FROM rules r
+         LEFT JOIN accounts a ON a.id = r.account_id LEFT JOIN categories c ON c.id = r.set_category_id
+         ORDER BY r.id`,
+      ),
+  ],
+  ["POST", "rules", async ({ db }, { body }) => ({ id: await createRule(db, RuleIn.parse(body)) })],
+  [
+    "DELETE",
+    "rules/:id",
+    async ({ db }, { params }) => {
+      await db.query("DELETE FROM rules WHERE id = ?", [id(params[0])]);
+      return { ok: true };
+    },
+  ],
   ["GET", "sync-runs", async ({ db }) => db.query("SELECT * FROM sync_runs ORDER BY started_at DESC LIMIT 50")],
   [
     "POST",
     "data/delete-all",
     async ({ db }) => {
       await db.query(
-        "TRUNCATE transactions, accounts, categories, plaid_items, sync_runs, saved_queries, idempotency_keys RESTART IDENTITY",
+        "TRUNCATE not_duplicates, rules, transactions, accounts, categories, plaid_items, sync_runs, saved_queries, idempotency_keys RESTART IDENTITY",
       );
       return { ok: true };
     },
@@ -435,7 +514,7 @@ const ROUTES: [string, string, Handler][] = [
   [
     "GET",
     "plaid/items",
-    async ({ db }) => db.query("SELECT id, item_id, institution, status, error, created_at FROM plaid_items"),
+    async ({ db }) => db.query("SELECT id, item_id, institution, status, error, created_at, last_synced_at FROM plaid_items ORDER BY id"),
   ],
   [
     "POST",
@@ -470,6 +549,28 @@ const ROUTES: [string, string, Handler][] = [
       } catch (e) {
         plaidFailure(e);
       }
+    },
+  ],
+  [
+    "POST",
+    "plaid/items/:id/link-token",
+    async (ctx, { params }) => {
+      let token: string | null;
+      try {
+        token = await plaid.createUpdateLinkToken(ctx.db, ctx.plaid, id(params[0]));
+      } catch (e) {
+        plaidFailure(e);
+      }
+      if (token === null) throw new HttpError(404, "connection not found");
+      return { link_token: token };
+    },
+  ],
+  [
+    "POST",
+    "plaid/items/:id/reconnected",
+    async ({ db }, { params }) => {
+      if (!(await plaid.markReconnected(db, id(params[0])))) throw new HttpError(404, "connection not found");
+      return { ok: true };
     },
   ],
   ["GET", "cron/sync", async (ctx) => syncAll(ctx)],

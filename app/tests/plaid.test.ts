@@ -44,6 +44,7 @@ class FakePlaid {
     const body = JSON.parse(String(init?.body));
     this.calls.push([path, body]);
     if (path === "/item/public_token/exchange") return Response.json({ access_token: "access-secret", item_id: "item1" });
+    if (path === "/link/token/create") return Response.json({ link_token: "link-1" });
     if (path === "/accounts/get") return Response.json({ accounts: [ACCOUNT] });
     if (path === "/transactions/sync") {
       const page = this.pages.shift()!;
@@ -99,8 +100,12 @@ it("runs the full sync lifecycle", async () => {
 it("marks reconnect on a failed sync and keeps the data", async () => {
   const fake = new FakePlaid([{ added: [txn("t1", 5)], next_cursor: "c1", has_more: false }, 400]);
   const [client, item] = await connect(fake);
+  expect(await scalar(db, "SELECT last_synced_at FROM plaid_items")).toBeNull();
   await plaid.syncItem(db, client, item);
+  const synced = await scalar(db, "SELECT last_synced_at FROM plaid_items");
+  expect(synced).toBeInstanceOf(Date);
   await expect(plaid.syncItem(db, client, item)).rejects.toBeInstanceOf(plaid.PlaidError);
+  expect(await scalar(db, "SELECT last_synced_at FROM plaid_items")).toEqual(synced);
   expect(await scalar(db, "SELECT status FROM plaid_items")).toBe("reconnect");
   expect(await scalar(db, "SELECT cursor FROM plaid_items")).toBe("c1");
   expect(await scalar(db, "SELECT COUNT(*) FROM transactions")).toBe(1);
@@ -130,4 +135,37 @@ it("restarts after a mutation during pagination", async () => {
   const [client, item] = await connect(fake);
   expect((await plaid.syncItem(db, client, item)).added).toBe(1);
   expect(await scalar(db, "SELECT cursor FROM plaid_items")).toBe("c9");
+});
+
+it("makes an update-mode link token and clears reconnect", async () => {
+  const fake = new FakePlaid([{ added: [], next_cursor: "c1", has_more: false }, 400]);
+  const [client, item] = await connect(fake);
+  await plaid.syncItem(db, client, item);
+  await expect(plaid.syncItem(db, client, item)).rejects.toBeInstanceOf(plaid.PlaidError);
+  await plaid.createUpdateLinkToken(db, client, item);
+  const [path, body] = fake.calls.at(-1)!;
+  expect([path, body.access_token, body.products]).toEqual(["/link/token/create", "access-secret", undefined]);
+  expect(await plaid.createUpdateLinkToken(db, client, 999)).toBeNull();
+  expect(await plaid.markReconnected(db, item)).toBe(true);
+  expect(await db.query("SELECT id, status, cursor FROM plaid_items")).toEqual([{ id: item, status: "ok", cursor: "c1" }]);
+});
+
+it("skips added rows before the history cutover of the account", async () => {
+  const fake = new FakePlaid([{ added: [], next_cursor: "c1", has_more: false }]);
+  const [client, item] = await connect(fake);
+  await plaid.syncItem(db, client, item);
+  await db.query("UPDATE accounts SET history_cutover = '2026-06-01'");
+  fake.pages = [
+    {
+      added: [
+        { ...txn("old", 1), date: "2026-05-31" },
+        { ...txn("on", 2), date: "2026-06-01" },
+        { ...txn("new", 3), date: "2026-06-02" },
+      ],
+      next_cursor: "c2",
+      has_more: false,
+    },
+  ];
+  expect((await plaid.syncItem(db, client, item)).added).toBe(2);
+  expect((await db.query("SELECT source_id FROM transactions ORDER BY date")).map((r) => r.source_id)).toEqual(["on", "new"]);
 });

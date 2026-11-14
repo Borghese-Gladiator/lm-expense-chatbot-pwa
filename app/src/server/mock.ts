@@ -1,7 +1,8 @@
 /** Demo mode: fake Plaid, fake Ask, and seed data. Revert the commit that adds this file to go back to real calls. */
 import type { AnalyticsQuery } from "./analytics";
 import type { AskResult } from "./ask";
-import type { Settings } from "./config";
+import { loadSettings, type Settings } from "./config";
+import { encrypt } from "./crypto";
 import { categoryIdFor, scalar, type Db } from "./db";
 
 export const mockSettings = (s: Settings): Settings => ({
@@ -144,6 +145,23 @@ export async function seedDemo(db: Db): Promise<number> {
         "Food by month", JSON.stringify({ measure: "spending", metric: "total", dimensions: ["month", "category"], filters: { category_groups: ["Food"] }, compare: "none", chart: "stacked_bar" }),
         "Top merchants", JSON.stringify({ measure: "spending", metric: "total", dimensions: ["merchant"], filters: {}, compare: "none", limit: 15 }),
       ],
+    );
+    const token = encrypt("mock-access-token", mockSettings(loadSettings()).appSecretKey);
+    await tx.query(
+      `INSERT INTO plaid_items (item_id, institution, access_token_enc, status, error)
+       VALUES ('mock-item', 'Mock Bank', ?, 'ok', NULL), ('mock-item-2', 'Mock Credit Union', ?, 'reconnect', 'ITEM_LOGIN_REQUIRED: x')`,
+      [token, token],
+    );
+    await tx.query(
+      `INSERT INTO accounts (name, type, institution, source, source_id, plaid_item_id)
+       VALUES ('Mock Bank Checking', 'checking', 'Mock Bank', 'plaid', 'mock-chk', (SELECT id FROM plaid_items WHERE item_id = 'mock-item')),
+              ('Checking (CSV)', 'checking', NULL, 'csv', NULL, NULL)`,
+    );
+    await tx.query(
+      `INSERT INTO transactions (source, source_id, account_id, date, amount, payee_raw, merchant)
+       SELECT s, sid, (SELECT id FROM accounts WHERE source_id = 'mock-chk'), d::date, -42.17, p, p
+       FROM (VALUES ('plaid', 'mock-dup', ?, 'CORNER GROCERY'), ('csv', 'mock-dup-csv', ?, 'Corner Grocery')) v(s, sid, d, p)`,
+      [new Date(end - 10 * 86_400_000).toISOString().slice(0, 10), new Date(end - 8 * 86_400_000).toISOString().slice(0, 10)],
     );
   });
   return rows.length;
