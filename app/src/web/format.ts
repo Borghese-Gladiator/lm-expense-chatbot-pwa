@@ -57,15 +57,27 @@ export const dimValue = (dim: Dimension | undefined, v: string | undefined) => {
 export const iso = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-export type Preset = "this_month" | "last_month" | "last_3" | "last_12" | "ytd" | "last_year" | "all" | "custom";
+export type Preset =
+  | "this_month"
+  | "last_month"
+  | "last_30"
+  | "last_90"
+  | "last_3"
+  | "last_12"
+  | "ytd"
+  | "last_year"
+  | "all"
+  | "custom";
 
 export const PRESETS: { id: Preset; label: string }[] = [
-  { id: "this_month", label: "This month" },
-  { id: "last_month", label: "Last month" },
-  { id: "last_3", label: "Last 3 months" },
-  { id: "last_12", label: "Last 12 months" },
-  { id: "ytd", label: "Year to date" },
-  { id: "last_year", label: "Last year" },
+  { id: "this_month", label: "This month (calendar)" },
+  { id: "last_month", label: "Last month (calendar)" },
+  { id: "last_30", label: "Last 30 days (rolling)" },
+  { id: "last_90", label: "Last 90 days (rolling)" },
+  { id: "last_3", label: "Last 3 complete months (calendar)" },
+  { id: "last_12", label: "Last 12 months (calendar)" },
+  { id: "ytd", label: "Year to date (calendar)" },
+  { id: "last_year", label: "Last year (calendar)" },
   { id: "all", label: "All time" },
   { id: "custom", label: "Custom" },
 ];
@@ -73,15 +85,20 @@ export const PRESETS: { id: Preset; label: string }[] = [
 export function presetRange(p: Preset, today = new Date()): { start: string | null; end: string | null } {
   const y = today.getFullYear();
   const m = today.getMonth();
+  const d = today.getDate();
   switch (p) {
     case "this_month":
       return { start: iso(new Date(y, m, 1)), end: iso(new Date(y, m + 1, 0)) };
     case "last_month":
       return { start: iso(new Date(y, m - 1, 1)), end: iso(new Date(y, m, 0)) };
+    case "last_30":
+      return { start: iso(new Date(y, m, d - 29)), end: iso(today) };
+    case "last_90":
+      return { start: iso(new Date(y, m, d - 89)), end: iso(today) };
     case "last_3":
-      return { start: iso(new Date(y, m - 2, 1)), end: iso(new Date(y, m + 1, 0)) };
+      return { start: iso(new Date(y, m - 3, 1)), end: iso(new Date(y, m, 0)) };
     case "last_12":
-      return { start: iso(new Date(y, m - 11, 1)), end: iso(new Date(y, m + 1, 0)) };
+      return { start: iso(new Date(y, m - 12, 1)), end: iso(new Date(y, m, 0)) };
     case "ytd":
       return { start: iso(new Date(y, 0, 1)), end: iso(today) };
     case "last_year":
