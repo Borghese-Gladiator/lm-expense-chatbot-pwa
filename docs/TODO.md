@@ -14,9 +14,7 @@ The work items are in order inside each section. Requirement IDs refer to [PRD.m
 - [x] **Plaid and CSV reconciliation.** Recommended approach: give each account a `history_cutover` date. Plaid skips transactions before that date, and the CSV history covers them. As a second step, match on account, amount, and a date that is within 3 days. Show the possible duplicates for review.
 - [x] **Plaid Link update mode** (BANK-06). For a connection with status `reconnect`, open Link with the item's access token.
 - [x] **Last sync time for each connection** (BANK-07).
-- [ ] **Basic rules engine** (Feature E). Add a `rules` table with conditions (text contains, account, amount range) and actions (category, merchant, tags, reviewed). Run rules on new rows in CSV import and Plaid sync. Skip rows with `user_edited`. Add a preview endpoint and an "apply to past transactions" action. Add `rule_executions` for the audit and undo.
-  - Done: the `rules` table, conditions, actions, and rules on import and sync (PR #28).
-  - Open: preview, "apply to past transactions", and undo. The awb task `430c0f2a` stopped when the disk was full. Run `awb retry 430c0f2a`.
+- [x] **Basic rules engine** (Feature E). Add a `rules` table with conditions (text contains, account, amount range) and actions (category, merchant, tags, reviewed). Run rules on new rows in CSV import and Plaid sync. Skip rows with `user_edited`. Add a preview endpoint and an "apply to past transactions" action. Add `rule_executions` for the audit and undo.
 
 ## Milestone 2: Convert the UI to Mantine
 
