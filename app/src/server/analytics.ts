@@ -21,6 +21,7 @@ const DIMENSIONS = [
   "tag",
   "type",
   "day_of_week",
+  "month_of_year",
   "weekend",
 ] as const;
 type Dimension = (typeof DIMENSIONS)[number];
@@ -40,6 +41,7 @@ export const DIM_SQL: Record<Dimension, string> = {
   tag: "tag",
   type: "txn_type",
   day_of_week: "to_char(date, 'ID Dy')",
+  month_of_year: "CAST(extract(month FROM date) AS INT)",
   weekend: "CASE WHEN extract(isodow FROM date) IN (6, 7) THEN 'Weekend' ELSE 'Weekday' END",
 };
 

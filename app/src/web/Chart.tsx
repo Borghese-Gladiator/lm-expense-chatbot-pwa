@@ -42,7 +42,7 @@ export function resolveKind(kind: ChartKind, dims: Dimension[]): Exclude<ChartKi
   if (kind !== "auto") return kind;
   if (dims.length === 0) return "table";
   const time = TIME_DIMS.includes(dims[0]);
-  if (dims.length === 2) return time ? "stacked_bar" : "table";
+  if (dims.length === 2) return time ? "stacked_bar" : dims[0] === "month_of_year" ? "line" : "table";
   return time ? "line" : "bar";
 }
 
@@ -108,6 +108,7 @@ export function Chart({ rows, dimensions, metric, kind, height = 320, horizontal
     } else if (dim1 && (resolved === "stacked_bar" || resolved === "line" || resolved === "area" || resolved === "bar")) {
       const xs = [...new Set(rows.map((r) => r.d0!))];
       if (TIME_DIMS.includes(dim0)) xs.sort();
+      if (dim0 === "month_of_year") xs.sort((a, b) => Number(a) - Number(b));
       const totals = new Map<string, number>();
       rows.forEach((r) => totals.set(r.d1!, (totals.get(r.d1!) ?? 0) + Math.abs(r.value ?? 0)));
       const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k);
@@ -124,7 +125,14 @@ export function Chart({ rows, dimensions, metric, kind, height = 320, horizontal
       option = {
         ...base,
         color: names.map((n, i) => (n === "Other" ? t.other : t.series[i])),
-        legend: { top: 0, icon: "roundRect", itemWidth: 10, itemHeight: 10, textStyle: { color: t.ink2 } },
+        legend: {
+          top: 0,
+          icon: "roundRect",
+          itemWidth: 10,
+          itemHeight: 10,
+          textStyle: { color: t.ink2 },
+          formatter: (n: string) => (n === "Other" ? n : dimValue(dim1, n)),
+        },
         grid: { ...base.grid, top: 40 },
         tooltip: { ...tooltip, trigger: "axis" },
         xAxis: {
