@@ -15,6 +15,7 @@ import { loadSettings, type Settings } from "./config";
 import { CsvImportSchema, importCsv } from "./csv";
 import { one, openDb, scalar, type Db, type Row } from "./db";
 import * as plaid from "./plaid";
+import { createRule, RuleIn } from "./rules";
 
 export interface Ctx {
   db: Db;
@@ -458,13 +459,32 @@ const ROUTES: [string, string, Handler][] = [
     "import/csv",
     async ({ db, settings }, { body }) => importCsv(db, CsvImportSchema.parse(body), settings.currency),
   ],
+  [
+    "GET",
+    "rules",
+    async ({ db }) =>
+      db.query(
+        `SELECT r.*, a.name AS account, c.name AS category FROM rules r
+         LEFT JOIN accounts a ON a.id = r.account_id LEFT JOIN categories c ON c.id = r.set_category_id
+         ORDER BY r.id`,
+      ),
+  ],
+  ["POST", "rules", async ({ db }, { body }) => ({ id: await createRule(db, RuleIn.parse(body)) })],
+  [
+    "DELETE",
+    "rules/:id",
+    async ({ db }, { params }) => {
+      await db.query("DELETE FROM rules WHERE id = ?", [id(params[0])]);
+      return { ok: true };
+    },
+  ],
   ["GET", "sync-runs", async ({ db }) => db.query("SELECT * FROM sync_runs ORDER BY started_at DESC LIMIT 50")],
   [
     "POST",
     "data/delete-all",
     async ({ db }) => {
       await db.query(
-        "TRUNCATE not_duplicates, transactions, accounts, categories, plaid_items, sync_runs, saved_queries, idempotency_keys RESTART IDENTITY",
+        "TRUNCATE not_duplicates, rules, transactions, accounts, categories, plaid_items, sync_runs, saved_queries, idempotency_keys RESTART IDENTITY",
       );
       return { ok: true };
     },
