@@ -78,6 +78,17 @@ const AccountPatch = z.object({
   history_cutover: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
 });
 const MergeIn = z.object({ into_id: z.number().int() });
+const ResolveIn = z.object({ keep: z.number().int(), remove: z.number().int(), not_duplicate: z.boolean().default(false) });
+const DUPLICATES = `
+  SELECT p.id AS plaid_id, c.id AS csv_id, a.name AS account, p.amount,
+         p.date AS plaid_date, c.date AS csv_date,
+         COALESCE(p.merchant, p.payee_raw) AS plaid_payee, COALESCE(c.merchant, c.payee_raw) AS csv_payee
+  FROM transactions p
+  JOIN transactions c ON c.account_id = p.account_id AND c.amount = p.amount AND abs(c.date - p.date) <= 3
+  JOIN accounts a ON a.id = p.account_id
+  WHERE p.source = 'plaid' AND c.source = 'csv'
+    AND NOT EXISTS (SELECT 1 FROM not_duplicates n WHERE n.plaid_id = p.id AND n.csv_id = c.id)
+  ORDER BY p.date DESC, p.id, c.id`;
 const CategoryIn = z.object({
   name: z.string().min(1),
   group_name: z.string().nullish(),
@@ -335,6 +346,25 @@ const ROUTES: [string, string, Handler][] = [
       return { ok: true };
     },
   ],
+  ["GET", "duplicates", async ({ db }) => db.query(DUPLICATES)],
+  [
+    "POST",
+    "duplicates/resolve",
+    async ({ db }, { body }) => {
+      const b = ResolveIn.parse(body);
+      const pair = await one<{ plaid: number; csv: number }>(
+        db,
+        `SELECT p.id AS plaid, c.id AS csv FROM transactions p, transactions c
+         WHERE p.source = 'plaid' AND c.source = 'csv' AND p.id = ANY(?::bigint[]) AND c.id = ANY(?::bigint[])`,
+        [[b.keep, b.remove], [b.keep, b.remove]],
+      );
+      if (!pair || b.keep === b.remove) throw new HttpError(404, "pair not found");
+      if (b.not_duplicate)
+        await db.query("INSERT INTO not_duplicates (plaid_id, csv_id) VALUES (?, ?) ON CONFLICT DO NOTHING", [pair.plaid, pair.csv]);
+      else await db.query("DELETE FROM transactions WHERE id = ?", [b.remove]);
+      return { ok: true };
+    },
+  ],
   [
     "POST",
     "accounts",
@@ -434,7 +464,7 @@ const ROUTES: [string, string, Handler][] = [
     "data/delete-all",
     async ({ db }) => {
       await db.query(
-        "TRUNCATE transactions, accounts, categories, plaid_items, sync_runs, saved_queries, idempotency_keys RESTART IDENTITY",
+        "TRUNCATE not_duplicates, transactions, accounts, categories, plaid_items, sync_runs, saved_queries, idempotency_keys RESTART IDENTITY",
       );
       return { ok: true };
     },

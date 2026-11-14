@@ -157,6 +157,12 @@ export async function seedDemo(db: Db): Promise<number> {
        VALUES ('Mock Bank Checking', 'checking', 'Mock Bank', 'plaid', 'mock-chk', (SELECT id FROM plaid_items WHERE item_id = 'mock-item')),
               ('Checking (CSV)', 'checking', NULL, 'csv', NULL, NULL)`,
     );
+    await tx.query(
+      `INSERT INTO transactions (source, source_id, account_id, date, amount, payee_raw, merchant)
+       SELECT s, sid, (SELECT id FROM accounts WHERE source_id = 'mock-chk'), d::date, -42.17, p, p
+       FROM (VALUES ('plaid', 'mock-dup', ?, 'CORNER GROCERY'), ('csv', 'mock-dup-csv', ?, 'Corner Grocery')) v(s, sid, d, p)`,
+      [new Date(end - 10 * 86_400_000).toISOString().slice(0, 10), new Date(end - 8 * 86_400_000).toISOString().slice(0, 10)],
+    );
   });
   return rows.length;
 }
