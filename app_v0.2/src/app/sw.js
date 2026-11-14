@@ -28,10 +28,10 @@ self.addEventListener("fetch", (event) => {
       (async () => {
         try {
           const res = await fetch(request);
-          // optionally cache response - Serwist's runtime caches may already handle common cases
+          // /api/ is network-only: never read from or written to a cache
           return res;
         } catch {
-          return caches.match(request) ?? new Response(null, { status: 504 });
+          return new Response(null, { status: 504 });
         }
       })()
     );
