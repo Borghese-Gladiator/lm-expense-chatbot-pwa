@@ -410,7 +410,7 @@ function ResultTable({ rows, dims, metric, onPick }: { rows: QueryRow[]; dims: D
           <Table.Tbody>
             {rowKeys.map((rk) => (
               <Table.Tr key={rk}>
-                <Table.Th>{dimValue(d0, rk)}</Table.Th>
+                <Table.Th scope="row">{dimValue(d0, rk)}</Table.Th>
                 {cols.map((c) => {
                   const v = cell.get(`${rk}|${c}`);
                   return (
