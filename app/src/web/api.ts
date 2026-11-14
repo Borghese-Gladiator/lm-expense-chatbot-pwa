@@ -3,7 +3,7 @@ export type Metric = "total" | "count" | "avg" | "median" | "pct_of_total" | "cu
 export type Dimension =
   | "day" | "week" | "month" | "quarter" | "year"
   | "category" | "category_group" | "merchant" | "account" | "tag" | "type"
-  | "day_of_week" | "weekend";
+  | "day_of_week" | "weekend" | "month_of_year";
 export type Compare = "none" | "previous_period" | "same_period_last_year" | "custom";
 export type ChartKind = "auto" | "bar" | "line" | "area" | "stacked_bar" | "treemap" | "table";
 
@@ -148,7 +148,7 @@ export const runQuery = (q: AnalyticsQuery) => api<QueryResult>("/analytics/quer
 export const DIM_LABEL: Record<Dimension, string> = {
   day: "Day", week: "Week", month: "Month", quarter: "Quarter", year: "Year",
   category: "Category", category_group: "Category group", merchant: "Merchant",
-  account: "Account", tag: "Tag", type: "Type", day_of_week: "Day of week", weekend: "Weekday / weekend",
+  account: "Account", tag: "Tag", type: "Type", day_of_week: "Day of week", weekend: "Weekday / weekend", month_of_year: "Month of year",
 };
 export const TIME_DIMS: Dimension[] = ["day", "week", "month", "quarter", "year"];
 export const METRIC_LABEL: Record<Metric, string> = {

@@ -397,8 +397,9 @@ function ResultTable({ rows, dims, metric, onPick }: { rows: QueryRow[]; dims: D
   const [d0, d1] = dims;
   if (d1) {
     const cols = [...new Set(rows.map((r) => r.d1!))];
+    if (TIME_DIMS.includes(d1)) cols.sort();
     const rowKeys = [...new Set(rows.map((r) => r.d0!))];
-    if (TIME_DIMS.includes(d0)) rowKeys.sort();
+    if (TIME_DIMS.includes(d0) || d0 === "month_of_year") rowKeys.sort();
     const cell = new Map(rows.map((r) => [`${r.d0}|${r.d1}`, r.value]));
     return (
       <Table.ScrollContainer minWidth={480}>
@@ -409,7 +410,7 @@ function ResultTable({ rows, dims, metric, onPick }: { rows: QueryRow[]; dims: D
           <Table.Tbody>
             {rowKeys.map((rk) => (
               <Table.Tr key={rk}>
-                <Table.Th>{dimValue(d0, rk)}</Table.Th>
+                <Table.Th scope="row">{dimValue(d0, rk)}</Table.Th>
                 {cols.map((c) => {
                   const v = cell.get(`${rk}|${c}`);
                   return (
