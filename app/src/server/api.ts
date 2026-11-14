@@ -15,6 +15,7 @@ import { loadSettings, type Settings } from "./config";
 import { CsvImportSchema, importCsv } from "./csv";
 import { one, openDb, scalar, type Db, type Row } from "./db";
 import * as plaid from "./plaid";
+import { listHistory, withHistory } from "./history";
 import { applyRule, createRule, previewRule, RuleIn, undoExecution } from "./rules";
 
 export interface Ctx {
@@ -134,7 +135,9 @@ async function patchTxns(db: Db, ids: number[], body: z.infer<typeof TxnPatch>) 
   if (body.clear_type) sets.push("type = NULL");
   if (!sets.length) return;
   sets.push("user_edited = TRUE", "updated_at = now()");
-  await db.query(`UPDATE transactions SET ${sets.join(", ")} WHERE id = ANY(?::bigint[])`, [...params, ids]);
+  await withHistory(db, ids, "Manual", null, async () => {
+    await db.query(`UPDATE transactions SET ${sets.join(", ")} WHERE id = ANY(?::bigint[])`, [...params, ids]);
+  });
 }
 
 function plaidFailure(e: unknown): never {
@@ -319,7 +322,11 @@ const ROUTES: [string, string, Handler][] = [
         [tid],
       );
       if (!found) throw new HttpError(404, "transaction not found");
-      return { ...found, children: await db.query("SELECT * FROM transactions WHERE parent_id = ?", [tid]) };
+      return {
+        ...found,
+        children: await db.query("SELECT * FROM transactions WHERE parent_id = ?", [tid]),
+        history: await listHistory(db, tid),
+      };
     },
   ],
   [

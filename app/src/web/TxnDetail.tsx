@@ -26,6 +26,7 @@ interface Detail {
   source: string;
   source_id: string | null;
   raw: unknown;
+  history: { id: number; field: string; old_value: string | null; new_value: string | null; source: string; rule_name: string | null; created_at: string }[];
   created_at: string;
   updated_at: string;
 }
@@ -106,6 +107,22 @@ export function TxnDetail({ id, onClose }: { id: number; onClose: () => void }) 
         <Button onClick={save} disabled={Object.keys(draft).length === 0} loading={saving}>Save</Button>
         {saveError && <Text c="red" size="sm">{saveError}</Text>}
       </Group>
+      <Title order={3} size="h6" mt="xl" mb="xs">History</Title>
+      {data.history.length === 0 ? (
+        <Text c="dimmed" size="sm">No changes yet</Text>
+      ) : (
+        <Table fz="sm" verticalSpacing={2} aria-label="History">
+          <Table.Tbody>
+            {data.history.map((h) => (
+              <Table.Tr key={h.id}>
+                <Table.Td>{new Date(h.created_at).toLocaleString()}</Table.Td>
+                <Table.Td>{h.field}: {h.old_value ?? "—"} → {h.new_value ?? "—"}</Table.Td>
+                <Table.Td>{h.source}{h.rule_name ? ` · ${h.rule_name}` : ""}</Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+      )}
       <Title order={3} size="h6" mt="xl" mb="xs">Source record</Title>
       <Table fz="sm" withRowBorders={false} verticalSpacing={2}>
         <Table.Tbody>
