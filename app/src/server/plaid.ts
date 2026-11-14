@@ -215,12 +215,13 @@ async function apply(db: Db, data: Awaited<ReturnType<typeof fetchAll>>): Promis
   let modified = 0;
   let removed = 0;
   for (const t of data.added) {
-    const account = await scalar<number | undefined>(
+    const acct = await one<{ id: number; history_cutover: string | null }>(
       db,
-      "SELECT id FROM accounts WHERE source = 'plaid' AND source_id = ?",
+      "SELECT id, history_cutover FROM accounts WHERE source = 'plaid' AND source_id = ?",
       [t.account_id],
     );
-    if (account === undefined) continue;
+    if (!acct || (acct.history_cutover && String(t.date) < acct.history_cutover)) continue;
+    const account = acct.id;
     const carry: Row | undefined = t.pending_transaction_id
       ? await one(
           db,

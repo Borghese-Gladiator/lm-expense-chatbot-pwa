@@ -97,6 +97,7 @@ export interface Account {
   balance_at: string | null;
   archived: boolean;
   plaid_item_id: number | null;
+  history_cutover: string | null;
   txn_count: number;
 }
 
