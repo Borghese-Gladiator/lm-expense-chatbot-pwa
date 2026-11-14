@@ -149,3 +149,23 @@ it("makes an update-mode link token and clears reconnect", async () => {
   expect(await plaid.markReconnected(db, item)).toBe(true);
   expect(await db.query("SELECT id, status, cursor FROM plaid_items")).toEqual([{ id: item, status: "ok", cursor: "c1" }]);
 });
+
+it("skips added rows before the history cutover of the account", async () => {
+  const fake = new FakePlaid([{ added: [], next_cursor: "c1", has_more: false }]);
+  const [client, item] = await connect(fake);
+  await plaid.syncItem(db, client, item);
+  await db.query("UPDATE accounts SET history_cutover = '2026-06-01'");
+  fake.pages = [
+    {
+      added: [
+        { ...txn("old", 1), date: "2026-05-31" },
+        { ...txn("on", 2), date: "2026-06-01" },
+        { ...txn("new", 3), date: "2026-06-02" },
+      ],
+      next_cursor: "c2",
+      has_more: false,
+    },
+  ];
+  expect((await plaid.syncItem(db, client, item)).added).toBe(2);
+  expect((await db.query("SELECT source_id FROM transactions ORDER BY date")).map((r) => r.source_id)).toEqual(["on", "new"]);
+});

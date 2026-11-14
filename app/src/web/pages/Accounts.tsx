@@ -161,12 +161,12 @@ export function Accounts() {
       <Section title="Accounts">
         <LoadState empty={meta?.accounts.length === 0} emptyText="No accounts yet." />
         {meta && meta.accounts.length > 0 && (
-          <Table.ScrollContainer minWidth={560}>
+          <Table.ScrollContainer minWidth={720}>
             <Table fz="sm">
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Name</Table.Th><Table.Th>Type</Table.Th><Table.Th>Source</Table.Th>
-                  <Table.Th ta="right">Transactions</Table.Th><Table.Th ta="right">Balance</Table.Th><Table.Th />
+                  <Table.Th ta="right">Transactions</Table.Th><Table.Th ta="right">Balance</Table.Th><Table.Th>History cutover</Table.Th><Table.Th />
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
@@ -177,6 +177,18 @@ export function Accounts() {
                     <Table.Td>{a.source}</Table.Td>
                     <Table.Td ta="right" style={NUM}>{a.txn_count}</Table.Td>
                     <Table.Td ta="right" style={NUM}>{a.balance == null ? "—" : money2(a.balance)}</Table.Td>
+                    <Table.Td>
+                      <TextInput
+                        type="date"
+                        size="xs"
+                        aria-label={`History cutover for ${a.name}`}
+                        defaultValue={a.history_cutover ?? ""}
+                        onChange={async (e) => {
+                          await api(`/accounts/${a.id}`, { history_cutover: e.currentTarget.value || null }, "PATCH");
+                          await reloadMeta();
+                        }}
+                      />
+                    </Table.Td>
                     <Table.Td ta="right">
                       <Group gap="xs" justify="flex-end" wrap="nowrap">
                       {a.source === "plaid" && (

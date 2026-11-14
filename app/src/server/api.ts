@@ -72,7 +72,11 @@ const AccountIn = z.object({
   currency: z.string().default("USD"),
   balance: z.number().nullish(),
 });
-const AccountPatch = z.object({ name: z.string().nullish(), archived: z.boolean().nullish() });
+const AccountPatch = z.object({
+  name: z.string().nullish(),
+  archived: z.boolean().nullish(),
+  history_cutover: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
+});
 const MergeIn = z.object({ into_id: z.number().int() });
 const CategoryIn = z.object({
   name: z.string().min(1),
@@ -351,7 +355,7 @@ const ROUTES: [string, string, Handler][] = [
     "accounts/:id",
     async ({ db }, { params, body }) => {
       const b = AccountPatch.parse(body);
-      const fields = Object.entries(b).filter(([, v]) => v !== null && v !== undefined);
+      const fields = Object.entries(b).filter(([k, v]) => v !== undefined && (v !== null || k === "history_cutover"));
       if (fields.length)
         await db.query(`UPDATE accounts SET ${fields.map(([k]) => `${k} = ?`).join(", ")} WHERE id = ?`, [
           ...fields.map(([, v]) => v),
