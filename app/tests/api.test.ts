@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { authorize } from "@/auth";
+import { authorize, sessionToken } from "@/auth";
 import { handle, type Ctx } from "@/server/api";
 import { loadSettings } from "@/server/config";
 import { decrypt, encrypt } from "@/server/crypto";
@@ -99,21 +99,55 @@ it("round-trips token encryption", () => {
 });
 
 describe("authorize", () => {
-  const req = (path: string, auth?: string) =>
-    new Request(`http://test${path}`, { headers: auth ? { authorization: auth } : {} });
-  const basic = (pw: string) => `Basic ${Buffer.from(`me:${pw}`).toString("base64")}`;
+  const env = { APP_PASSWORD: "pw" } as unknown as NodeJS.ProcessEnv;
+  const good = `sl_session=${sessionToken("pw")}`;
+  const req = (path: string, headers: Record<string, string> = {}) => new Request(`http://test${path}`, { headers });
+  const login = (password: string) =>
+    authorize(new Request("http://test/api/login", { method: "POST", body: JSON.stringify({ password }) }), env);
 
   it.each([
-    ["local, no password", "/api/health", undefined, {}, null],
-    ["vercel, no password", "/api/health", undefined, { VERCEL: "1" }, 503],
-    ["no credentials", "/", undefined, { APP_PASSWORD: "pw" }, 401],
-    ["wrong password", "/", basic("nope"), { APP_PASSWORD: "pw" }, 401],
-    ["right password", "/api/meta", basic("pw"), { APP_PASSWORD: "pw" }, null],
-    ["cron, no secret set", "/api/cron/sync", "Bearer x", { APP_PASSWORD: "pw" }, 401],
-    ["cron, wrong secret", "/api/cron/sync", "Bearer x", { CRON_SECRET: "cs" }, 401],
-    ["cron, password is not enough", "/api/cron/sync", basic("pw"), { APP_PASSWORD: "pw", CRON_SECRET: "cs" }, 401],
-    ["cron, right secret", "/api/cron/sync", "Bearer cs", { CRON_SECRET: "cs" }, null],
-  ])("%s", (_name, path, auth, env, status) => {
-    expect(authorize(req(path, auth), env as NodeJS.ProcessEnv)?.status ?? null).toBe(status);
+    ["local, no password", "/api/health", {}, {}, null],
+    ["vercel, no password", "/api/health", {}, { VERCEL: "1" }, 503],
+    ["api, no cookie", "/api/meta", {}, { APP_PASSWORD: "pw" }, 401],
+    ["page, no cookie", "/", {}, { APP_PASSWORD: "pw" }, 307],
+    ["login page is open", "/login", {}, { APP_PASSWORD: "pw" }, null],
+    ["valid cookie", "/api/meta", { cookie: good }, { APP_PASSWORD: "pw" }, null],
+    ["changed signature", "/api/meta", { cookie: `${good.slice(0, -2)}xx` }, { APP_PASSWORD: "pw" }, 401],
+    ["cookie for another password", "/", { cookie: `sl_session=${sessionToken("old")}` }, { APP_PASSWORD: "pw" }, 307],
+    ["expired cookie", "/api/meta", { cookie: `sl_session=${sessionToken("pw", Date.now() - 31 * 86400e3)}` }, { APP_PASSWORD: "pw" }, 401],
+    ["cron, no secret set", "/api/cron/sync", { authorization: "Bearer x" }, { APP_PASSWORD: "pw" }, 401],
+    ["cron, wrong secret", "/api/cron/sync", { authorization: "Bearer x" }, { CRON_SECRET: "cs" }, 401],
+    ["cron, cookie is not enough", "/api/cron/sync", { cookie: good }, { APP_PASSWORD: "pw", CRON_SECRET: "cs" }, 401],
+    ["cron, right secret", "/api/cron/sync", { authorization: "Bearer cs" }, { APP_PASSWORD: "pw", CRON_SECRET: "cs" }, null],
+  ])("%s", async (_name, path, headers, e, status) => {
+    expect((await authorize(req(path, headers), e as NodeJS.ProcessEnv))?.status ?? null).toBe(status);
+  });
+
+  it("redirects pages to /login and gives the API a plain 401", async () => {
+    expect((await authorize(req("/"), env))?.headers.get("location")).toBe("http://test/login");
+    expect((await authorize(req("/api/meta"), env))?.headers.get("www-authenticate")).toBeNull();
+  });
+
+  it("sets a 30-day secure cookie on the right password only", async () => {
+    const ok = (await login("pw"))!;
+    const set = ok.headers.get("set-cookie")!;
+    expect(ok.status).toBe(200);
+    expect(set).toMatch(/HttpOnly/);
+    expect(set).toMatch(/Secure/);
+    expect(set).toMatch(/SameSite=Lax/);
+    const days = (Date.parse(/Expires=([^;]+)/.exec(set)![1]) - Date.now()) / 86400e3;
+    expect(days).toBeGreaterThan(29.9);
+    expect(days).toBeLessThan(30.1);
+    const cookie = set.split(";")[0];
+    expect(await authorize(req("/api/meta", { cookie }), env)).toBeNull();
+
+    const bad = (await login("nope"))!;
+    expect(bad.status).toBe(401);
+    expect(bad.headers.get("set-cookie")).toBeNull();
+  });
+
+  it("clears the cookie on logout", async () => {
+    const out = (await authorize(new Request("http://test/api/logout", { method: "POST", headers: { cookie: good } }), env))!;
+    expect(out.headers.get("set-cookie")).toMatch(/^sl_session=;.*Max-Age=0/);
   });
 });

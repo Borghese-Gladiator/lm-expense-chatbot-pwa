@@ -67,7 +67,7 @@ Run `npm run dev` or `npm run seed` one at a time, because PGlite opens the fold
 
 ## Security
 
-- The browser asks for a password (HTTP Basic). Any user name works. The password is `APP_PASSWORD`.
+- The `/login` page asks for `APP_PASSWORD`. A correct password sets a signed `HttpOnly` cookie for 30 days. **Sign out** clears it. To sign out all browsers, change `APP_PASSWORD`.
 - On Vercel, if `APP_PASSWORD` is not set, every request gets a 503. The bank data never becomes public by mistake.
 - Without `APP_PASSWORD` on your machine, the app is open, so that local development is simple.
 - `/api/cron/sync` accepts only `Authorization: Bearer $CRON_SECRET`. The app password does not open it.
