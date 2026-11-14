@@ -139,8 +139,7 @@ export function DrilldownDrawer({ drill, onClose }: { drill: Drill; onClose: () 
       opened
       onClose={onClose}
       position="right"
-      size="xl"
-      fullScreen={mobile}
+      size={mobile ? "100%" : "xl"}
       closeButtonProps={{ "aria-label": "Close" }}
       title={
         <div>

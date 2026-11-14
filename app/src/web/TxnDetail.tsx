@@ -40,7 +40,7 @@ export function TxnDetail({ id, onClose }: { id: number; onClose: () => void }) 
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const shell = (title: React.ReactNode, body: React.ReactNode) => (
-    <Drawer opened onClose={onClose} position="right" size="xl" fullScreen={mobile} title={title} closeButtonProps={{ "aria-label": "Close" }}>
+    <Drawer opened onClose={onClose} position="right" size={mobile ? "100%" : "xl"} title={title} closeButtonProps={{ "aria-label": "Close" }}>
       {body}
     </Drawer>
   );
