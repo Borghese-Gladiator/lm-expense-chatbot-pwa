@@ -12,6 +12,7 @@ export interface Filters {
   end?: string | null;
   account_ids?: number[];
   category_ids?: number[];
+  exclude_category_ids?: number[];
   category_groups?: string[];
   merchants?: string[];
   tags?: string[];
