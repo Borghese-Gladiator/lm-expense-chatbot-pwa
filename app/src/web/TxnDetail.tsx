@@ -1,6 +1,7 @@
 import {
   Button, Checkbox, Code, Drawer, Group, NativeSelect, SimpleGrid, Table, Text, Textarea, TextInput, Title,
 } from "@mantine/core";
+import { useMediaQuery } from "@mantine/hooks";
 import { useState } from "react";
 
 import { api } from "./api";
@@ -34,11 +35,12 @@ export function TxnDetail({ id, onClose }: { id: number; onClose: () => void }) 
   const { meta, bump, version } = useApp();
   const { data, error, loading } = useAsync(() => api<Detail>(`/transactions/${id}`), [id, version]);
   const [draft, setDraft] = useState<Partial<Detail> & { tagText?: string }>({});
+  const mobile = !!useMediaQuery("(max-width: 47.99em)");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const shell = (title: React.ReactNode, body: React.ReactNode) => (
-    <Drawer opened onClose={onClose} position="right" size="xl" title={title} closeButtonProps={{ "aria-label": "Close" }}>
+    <Drawer opened onClose={onClose} position="right" size={mobile ? "100%" : "xl"} title={title} closeButtonProps={{ "aria-label": "Close" }}>
       {body}
     </Drawer>
   );

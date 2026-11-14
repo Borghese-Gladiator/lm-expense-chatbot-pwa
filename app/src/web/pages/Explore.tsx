@@ -85,7 +85,8 @@ export function Explore() {
   }, []);
 
   useEffect(() => {
-    history.replaceState(null, "", `#explore?q=${encodeURIComponent(JSON.stringify(q))}`);
+    const isDefault = JSON.stringify(q) === JSON.stringify(DEFAULT);
+    history.replaceState(null, "", isDefault ? "#explore" : `#explore?q=${encodeURIComponent(JSON.stringify(q))}`);
   }, [q]);
   useEffect(() => {
     const on = () => setQ((prev) => {
