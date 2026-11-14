@@ -108,6 +108,8 @@ const CategoryIn = z.object({
   exclude_from_totals: z.boolean().default(false),
   archived: z.boolean().default(false),
 });
+const TripIn = z.object({ name: z.string().trim().min(1), start_date: z.iso.date(), end_date: z.iso.date() });
+const TripLinkIn = z.object({ transaction_id: z.number().int(), amount: z.number().positive().optional() });
 const AskRequest = z.object({ question: z.string().min(3).max(500) });
 const PublicTokenIn = z.object({ public_token: z.string(), institution: z.string().nullish() });
 
@@ -514,13 +516,85 @@ const ROUTES: [string, string, Handler][] = [
       return { ok: true };
     },
   ],
+  [
+    "GET",
+    "trips",
+    async ({ db }) =>
+      db.query(
+        `SELECT t.*, COALESCE(SUM(l.amount), 0) AS linked_total, COUNT(l.transaction_id) AS txn_count
+         FROM trips t LEFT JOIN trip_transactions l ON l.trip_id = t.id
+         GROUP BY t.id ORDER BY t.start_date DESC, t.id DESC`,
+      ),
+  ],
+  [
+    "POST",
+    "trips",
+    async ({ db }, { body }) => {
+      const b = TripIn.parse(body);
+      if (b.end_date < b.start_date) throw new HttpError(400, "end date must not be before start date");
+      return {
+        id: await scalar(db, "INSERT INTO trips (name, start_date, end_date) VALUES (?, ?, ?) RETURNING id", [
+          b.name,
+          b.start_date,
+          b.end_date,
+        ]),
+      };
+    },
+  ],
+  [
+    "DELETE",
+    "trips/:id",
+    async ({ db }, { params }) => {
+      await db.query("DELETE FROM trips WHERE id = ?", [id(params[0])]);
+      return { ok: true };
+    },
+  ],
+  [
+    "GET",
+    "trips/:id/transactions",
+    async ({ db }, { params }) =>
+      db.query(
+        `SELECT l.transaction_id, l.amount, t.date, t.amount AS txn_amount, COALESCE(t.merchant, t.payee_raw) AS merchant
+         FROM trip_transactions l JOIN transactions t ON t.id = l.transaction_id
+         WHERE l.trip_id = ? ORDER BY t.date`,
+        [id(params[0])],
+      ),
+  ],
+  [
+    "POST",
+    "trips/:id/transactions",
+    async ({ db }, { params, body }) => {
+      const tid = id(params[0]);
+      const b = TripLinkIn.parse(body);
+      if (!(await one(db, "SELECT 1 FROM trips WHERE id = ?", [tid]))) throw new HttpError(404, "trip not found");
+      const amt = await scalar<number | undefined>(db, "SELECT amount FROM transactions WHERE id = ?", [b.transaction_id]);
+      if (amt === undefined) throw new HttpError(404, "transaction not found");
+      const full = Math.abs(Number(amt));
+      const linked = b.amount ?? full;
+      if (linked > full) throw new HttpError(400, "linked amount exceeds the transaction amount");
+      await db.query(
+        `INSERT INTO trip_transactions (trip_id, transaction_id, amount) VALUES (?, ?, ?)
+         ON CONFLICT (trip_id, transaction_id) DO UPDATE SET amount = EXCLUDED.amount`,
+        [tid, b.transaction_id, linked],
+      );
+      return { ok: true, amount: linked };
+    },
+  ],
+  [
+    "DELETE",
+    "trips/:id/transactions/:txn",
+    async ({ db }, { params }) => {
+      await db.query("DELETE FROM trip_transactions WHERE trip_id = ? AND transaction_id = ?", [id(params[0]), id(params[1])]);
+      return { ok: true };
+    },
+  ],
   ["GET", "sync-runs", async ({ db }) => db.query("SELECT * FROM sync_runs ORDER BY started_at DESC LIMIT 50")],
   [
     "POST",
     "data/delete-all",
     async ({ db }) => {
       await db.query(
-        "TRUNCATE not_duplicates, rule_executions, rules, transactions, accounts, categories, plaid_items, sync_runs, saved_queries, idempotency_keys RESTART IDENTITY",
+        "TRUNCATE trip_transactions, trips, not_duplicates, rule_executions, rules, transactions, accounts, categories, plaid_items, sync_runs, saved_queries, idempotency_keys RESTART IDENTITY",
       );
       return { ok: true };
     },

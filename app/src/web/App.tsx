@@ -8,6 +8,7 @@ import { Accounts } from "./pages/Accounts";
 import { Explore } from "./pages/Explore";
 import { Overview } from "./pages/Overview";
 import { Settings } from "./pages/Settings";
+import { Trips } from "./pages/Trips";
 import { Transactions } from "./pages/Transactions";
 import { Ctx, DrilldownDrawer, useMeta } from "./shared";
 import { TxnDetail } from "./TxnDetail";
@@ -16,6 +17,7 @@ const PAGES = {
   overview: { label: "Overview", el: Overview },
   explore: { label: "Explore", el: Explore },
   transactions: { label: "Transactions", el: Transactions },
+  trips: { label: "Trips", el: Trips },
   accounts: { label: "Accounts", el: Accounts },
   settings: { label: "Settings", el: Settings },
 } as const;
