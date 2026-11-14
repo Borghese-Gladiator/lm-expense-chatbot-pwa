@@ -36,6 +36,7 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 export const dimValue = (dim: Dimension | undefined, v: string | undefined) => {
   if (v == null) return "—";
   if (!dim) return v;
+  if (dim === "month_of_year") return MONTHS[Number(v) - 1];
   const [y, m, d] = v.split("-");
   switch (dim) {
     case "month":
