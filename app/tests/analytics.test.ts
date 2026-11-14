@@ -40,6 +40,11 @@ it("excludes a one-off and recalculates", async () => {
   expect(await total({ filters: { ...OCT, exclude_ids: [big] } })).toBeCloseTo(160);
 });
 
+it("excludes a category", async () => {
+  const groceries = await scalar<number>(db, "SELECT id FROM categories WHERE name = 'Groceries'");
+  expect(await total({ filters: { ...OCT, exclude_category_ids: [groceries] } })).toBeCloseTo(160);
+});
+
 it("groups by category", async () => {
   const out = await rows({ dimensions: ["category"], filters: OCT });
   expect(Object.fromEntries(out.map((r) => [r.d0, r.value]))).toEqual({ Groceries: 120, Restaurants: 100, Shopping: 60 });

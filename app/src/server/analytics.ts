@@ -60,6 +60,7 @@ export const FiltersSchema = z.object({
   end: isoDate.nullish(),
   account_ids: ids,
   category_ids: ids,
+  exclude_category_ids: ids,
   category_groups: strs,
   merchants: strs,
   tags: strs,
@@ -125,6 +126,10 @@ export function whereClause(f: Filters, measure: Measure | null): [string, unkno
   }
   if (f.account_ids.length) anyOf("account_id", f.account_ids);
   if (f.category_ids.length) anyOf("category_id", f.category_ids);
+  if (f.exclude_category_ids.length) {
+    clauses.push(`(category_id IS NULL OR category_id NOT IN (${f.exclude_category_ids.map(() => "?").join(", ")}))`);
+    params.push(...f.exclude_category_ids);
+  }
   if (f.category_groups.length) anyOf("category_group", f.category_groups);
   if (f.merchants.length) anyOf("merchant", f.merchants);
   if (f.types.length) anyOf("txn_type", f.types);
