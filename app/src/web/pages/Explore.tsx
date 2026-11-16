@@ -131,6 +131,11 @@ export function Explore() {
     });
   };
 
+  const excludeCategory = (name: string) => {
+    const ids = (meta?.categories ?? []).filter((c) => c.name === name).map((c) => c.id);
+    if (ids.length) setF({ exclude_category_ids: [...(q.filters.exclude_category_ids ?? []), ...ids] });
+  };
+
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     const name = saveName?.trim();
@@ -320,6 +325,11 @@ export function Explore() {
                 {q.filters.exclude_ids!.length} excluded ✕
               </Button>
             )}
+            {(q.filters.exclude_category_ids?.length ?? 0) > 0 && (
+              <Button size="xs" variant="light" onClick={() => setF({ exclude_category_ids: [] })} title="Bring excluded categories back">
+                {q.filters.exclude_category_ids!.length} categories excluded ✕
+              </Button>
+            )}
           </Group>
         </Stack>
       </Card>
@@ -365,7 +375,13 @@ export function Explore() {
           ) : view === "chart" && chartable ? (
             <Chart rows={data.rows} dimensions={q.dimensions} metric={q.metric} kind={q.chart ?? "auto"} height={380} onPick={drill} />
           ) : (
-            <ResultTable rows={data.rows} dims={q.dimensions} metric={q.metric} onPick={drill} />
+            <ResultTable
+              rows={data.rows}
+              dims={q.dimensions}
+              metric={q.metric}
+              onPick={drill}
+              onExclude={q.dimensions.length === 1 && q.dimensions[0] === "category" ? excludeCategory : undefined}
+            />
           )
         )}
       </Card>
@@ -388,12 +404,13 @@ function Summary({ rows, totals, metric, compareRange }: { rows?: QueryRow[]; to
   return (
     <div>
       <Text span fw={600}>{rows.length === 1 && rows[0].d0 === undefined ? metricValue(metric, rows[0].value) : `${rows.length} groups`}</Text>
+      {metric === "total" && rows.length > 1 && <Text span> · Total {money(rows.reduce((a, r) => a + (r.value ?? 0), 0))}</Text>}
       <Text span c="dimmed"> · {n.toLocaleString()} transactions</Text>
     </div>
   );
 }
 
-function ResultTable({ rows, dims, metric, onPick }: { rows: QueryRow[]; dims: Dimension[]; metric: Metric; onPick: (v: Partial<Record<Dimension, string>>) => void }) {
+function ResultTable({ rows, dims, metric, onPick, onExclude }: { rows: QueryRow[]; dims: Dimension[]; metric: Metric; onPick: (v: Partial<Record<Dimension, string>>) => void; onExclude?: (d0: string) => void }) {
   const [d0, d1] = dims;
   if (d1) {
     const cols = [...new Set(rows.map((r) => r.d1!))];
@@ -429,7 +446,7 @@ function ResultTable({ rows, dims, metric, onPick }: { rows: QueryRow[]; dims: D
     <Table.ScrollContainer minWidth={400}>
       <Table fz="sm" highlightOnHover>
         <Table.Thead>
-          <Table.Tr><Table.Th>{d0 ? DIM_LABEL[d0] : ""}</Table.Th><Table.Th ta="right">{METRIC_LABEL[metric]}</Table.Th><Table.Th ta="right">Transactions</Table.Th></Table.Tr>
+          <Table.Tr><Table.Th>{d0 ? DIM_LABEL[d0] : ""}</Table.Th><Table.Th ta="right">{METRIC_LABEL[metric]}</Table.Th><Table.Th ta="right">Transactions</Table.Th>{onExclude && <Table.Th />}</Table.Tr>
         </Table.Thead>
         <Table.Tbody>
           {rows.map((r, i) => (
@@ -437,6 +454,11 @@ function ResultTable({ rows, dims, metric, onPick }: { rows: QueryRow[]; dims: D
               <Table.Td>{dimValue(d0, r.d0)}</Table.Td>
               <Table.Td ta="right" style={NUM}>{metricValue(metric, r.value)}</Table.Td>
               <Table.Td ta="right" style={NUM}>{r.n}</Table.Td>
+              {onExclude && (
+                <Table.Td ta="right">
+                  <Button size="compact-xs" variant="subtle" aria-label={`Exclude ${r.d0}`} onClick={(e) => { e.stopPropagation(); onExclude(r.d0!); }}>Exclude</Button>
+                </Table.Td>
+              )}
             </Table.Tr>
           ))}
         </Table.Tbody>
