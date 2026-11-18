@@ -71,6 +71,7 @@ export const FiltersSchema = z.object({
   include_pending: z.boolean().default(false),
   include_excluded_categories: z.boolean().default(false),
   exclude_ids: ids,
+  trip_id: z.number().int().nullish(),
 });
 export type Filters = z.infer<typeof FiltersSchema>;
 
@@ -156,18 +157,26 @@ export function whereClause(f: Filters, measure: Measure | null): [string, unkno
   return [clauses.join(" AND ") || "TRUE", params];
 }
 
-function source(dimensions: Dimension[]): string {
+function source(dimensions: Dimension[], f: Filters): string {
+  const base =
+    f.trip_id == null
+      ? "reportable"
+      : `(SELECT r.*, COALESCE(SIGN(r.amount) * l.amount, r.amount) AS eff_amount FROM reportable r` +
+        ` JOIN trip_transactions l ON l.transaction_id = r.id AND l.trip_id = ${f.trip_id}) trip_rows`;
   if (dimensions.includes("tag"))
     return (
       "(SELECT *, unnest(CASE WHEN cardinality(tags) = 0 THEN ARRAY['(untagged)'] ELSE tags END)" +
-      " AS tag FROM reportable) src"
+      ` AS tag FROM ${base}) src`
     );
-  return "reportable";
+  return base;
 }
+
+const valueSql = (measure: Measure, f: Filters) =>
+  f.trip_id == null ? MEASURES[measure][1] : MEASURES[measure][1].replace("amount", "eff_amount");
 
 function aggregateSql(q: AnalyticsQuery, f: Filters): [string, unknown[]] {
   const [where, params] = whereClause(f, q.measure);
-  const value = MEASURES[q.measure][1];
+  const value = valueSql(q.measure, f);
   const dims = q.dimensions.map((d) => DIM_SQL[d]);
   const names = dims.map((_, i) => `d${i}`);
   const selectDims = dims.map((expr, i) => `${expr} AS d${i}`);
@@ -184,7 +193,7 @@ function aggregateSql(q: AnalyticsQuery, f: Filters): [string, unknown[]] {
 
   const inner =
     `SELECT ${[...selectDims, `${agg} AS value`, "COUNT(*) AS n"].join(", ")} ` +
-    `FROM ${source(q.dimensions)} WHERE ${where} ${group}`;
+    `FROM ${source(q.dimensions, f)} WHERE ${where} ${group}`;
   let outerValue = "value";
   if (q.metric === "pct_of_total") {
     const share = dims.length === 2 ? "PARTITION BY d0" : "";
@@ -327,14 +336,15 @@ export async function drilldown(db: Db, req: Drilldown) {
       params = [...params, val];
     }
   }
-  const value = MEASURES[q.measure][1];
+  const value = valueSql(q.measure, f);
+  const from = source([], f);
   const [txns, totals] = await Promise.all([
     db.query(
-      `SELECT *, ${value} AS value FROM reportable WHERE ${where} ORDER BY abs(amount) DESC LIMIT ${req.limit}`,
+      `SELECT *, ${value} AS value FROM ${from} WHERE ${where} ORDER BY abs(amount) DESC LIMIT ${req.limit}`,
       params,
     ),
     db.query<{ total: number | null; n: number }>(
-      `SELECT SUM(${value}) AS total, COUNT(*) AS n FROM reportable WHERE ${where}`,
+      `SELECT SUM(${value}) AS total, COUNT(*) AS n FROM ${from} WHERE ${where}`,
       params,
     ),
   ]);

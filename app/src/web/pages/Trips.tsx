@@ -2,7 +2,8 @@ import { Anchor, Button, Checkbox, Container, Group, Modal, Paper, Stack, Table,
 import { notifications } from "@mantine/notifications";
 import { useState } from "react";
 
-import { api, type Txn } from "../api";
+import { api, runQuery, type AnalyticsQuery, type Txn } from "../api";
+import { money2 } from "../format";
 import { Amount, LoadState, useAsync } from "../shared";
 
 interface Trip {
@@ -20,6 +21,67 @@ interface Draft {
 }
 
 const day = (d: string | null) => (d ? d.slice(0, 10) : "");
+
+const tripQuery = (id: number, over: Partial<AnalyticsQuery>): AnalyticsQuery => ({
+  measure: "spending",
+  metric: "total",
+  dimensions: [],
+  filters: { trip_id: id, include_pending: true, include_excluded_categories: true },
+  compare: "none",
+  ...over,
+});
+
+function Summary({ trip, version }: { trip: Trip; version: number }) {
+  const sum = useAsync(
+    () =>
+      Promise.all([
+        runQuery(tripQuery(trip.id, {})),
+        runQuery(tripQuery(trip.id, { metric: "count" })),
+        runQuery(tripQuery(trip.id, { dimensions: ["category"] })),
+      ]),
+    [trip.id, version],
+  );
+  if (!sum.data) return <LoadState loading={sum.loading} error={sum.error} />;
+  const [totalRes, countRes, cats] = sum.data;
+  const total = Number(totalRes.rows[0]?.value ?? 0);
+  const count = Number(countRes.rows[0]?.value ?? 0);
+  const days = trip.start_date
+    ? Math.max(1, Math.round((Date.parse(day(trip.end_date ?? trip.start_date)) - Date.parse(day(trip.start_date))) / 86_400_000) + 1)
+    : 1;
+  const cards: [string, string][] = [
+    ["Total", money2(total)],
+    ["Per day", money2(total / days)],
+    ["Count", String(count)],
+  ];
+  return (
+    <Stack mb="md">
+      <Group>
+        {cards.map(([label, value]) => (
+          <Paper key={label} withBorder p="md" aria-label={label}>
+            <Text c="dimmed" size="sm">{label}</Text>
+            <Text fw={600} size="xl">{value}</Text>
+          </Paper>
+        ))}
+      </Group>
+      <Table aria-label="By category">
+        <Table.Thead>
+          <Table.Tr>
+            <Table.Th>Category</Table.Th>
+            <Table.Th>Total</Table.Th>
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
+          {cats.rows.map((r) => (
+            <Table.Tr key={String(r.d0)}>
+              <Table.Td>{String(r.d0 ?? "Uncategorized")}</Table.Td>
+              <Table.Td>{money2(Number(r.value))}</Table.Td>
+            </Table.Tr>
+          ))}
+        </Table.Tbody>
+      </Table>
+    </Stack>
+  );
+}
 
 function TripPage({ trip, onBack }: { trip: Trip; onBack: () => void }) {
   const [reviewing, setReviewing] = useState(false);
@@ -57,6 +119,7 @@ function TripPage({ trip, onBack }: { trip: Trip; onBack: () => void }) {
       <Anchor component="button" type="button" onClick={onBack} mb="sm">Back to trips</Anchor>
       <Title order={1} size="h2">{trip.name}</Title>
       <Text c="dimmed" mb="md">{day(trip.start_date)} – {day(trip.end_date)}</Text>
+      <Summary trip={trip} version={version} />
       {(linked.data ?? []).length > 0 && (
         <Table mb="md" aria-label="Trip transactions">
           <Table.Tbody>

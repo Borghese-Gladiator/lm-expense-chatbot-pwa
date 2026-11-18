@@ -23,6 +23,7 @@ export interface Filters {
   include_pending?: boolean;
   include_excluded_categories?: boolean;
   exclude_ids?: number[];
+  trip_id?: number | null;
 }
 
 export interface AnalyticsQuery {

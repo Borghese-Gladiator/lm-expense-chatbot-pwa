@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it } from "vitest";
 
+import { AnalyticsQuerySchema, runQuery } from "@/server/analytics";
 import { handle, type Ctx } from "@/server/api";
 import { loadSettings } from "@/server/config";
 import { one, scalar } from "@/server/db";
@@ -59,4 +60,20 @@ it("C3: a link amount above the transaction amount returns 422", async () => {
   expect((await call("POST", `trips/${id}/transactions`, { transaction_id: t, amount: 100.01 })).status).toBe(422);
   expect((await call("POST", `trips/${id}/transactions`, { transaction_id: t, amount: 100 })).status).toBe(200);
   expect(await scalar(ctx.db, "SELECT COUNT(*) FROM trip_transactions")).toBe(1);
+});
+
+it("C3: the summary uses an AnalyticsQuery with a trip filter; a partial link counts its amount", async () => {
+  const trip = await scalar<number>(ctx.db, "INSERT INTO trips (name) VALUES ('T') RETURNING id");
+  const other = await scalar<number>(ctx.db, "INSERT INTO trips (name) VALUES ('O') RETURNING id");
+  const a = await addAccount(ctx.db);
+  const t1 = await addTxn(ctx.db, a, "2026-10-01", -100, "Hotel", "Travel");
+  const t2 = await addTxn(ctx.db, a, "2026-10-02", -60, "Dinner", "Dining");
+  const t3 = await addTxn(ctx.db, a, "2026-10-03", -999, "Unlinked");
+  await ctx.db.query("INSERT INTO trip_transactions VALUES (?, ?, NULL), (?, ?, 25), (?, ?, NULL)", [trip, t1, trip, t2, other, t3]);
+  const run = (over: object) =>
+    runQuery(ctx.db, AnalyticsQuerySchema.parse({ filters: { trip_id: trip }, ...over })) as Promise<{ rows: { d0?: string; value: number }[] }>;
+  expect(Number((await run({})).rows[0].value)).toBe(125);
+  expect(Number((await run({ metric: "count" })).rows[0].value)).toBe(2);
+  const byCat = Object.fromEntries((await run({ dimensions: ["category"] })).rows.map((r) => [r.d0, Number(r.value)]));
+  expect(byCat).toEqual({ Travel: 100, Dining: 25 });
 });
