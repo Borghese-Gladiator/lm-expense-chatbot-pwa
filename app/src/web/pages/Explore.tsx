@@ -136,6 +136,14 @@ export function Explore() {
     if (ids.length) setF({ exclude_category_ids: [...(q.filters.exclude_category_ids ?? []), ...ids] });
   };
 
+  const [back, setBack] = useState<AnalyticsQuery | null>(null);
+  const pickCompare = (v: string) => {
+    const ids = q.dimensions[0] === "category" ? (meta?.categories ?? []).filter((c) => c.name === v).map((c) => c.id) : [];
+    if (!ids.length) return drill(q.dimensions[0] ? { [q.dimensions[0]]: v } : {});
+    setBack(q);
+    setQ({ ...q, dimensions: ["merchant"], filters: { ...q.filters, category_ids: ids } });
+  };
+
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     const name = saveName?.trim();
@@ -199,7 +207,7 @@ export function Explore() {
               loadSaved();
             }}>Delete</Button>
           )}
-          <Button variant="default" onClick={() => { setQ(DEFAULT); setSavedId(null); }}>Reset</Button>
+          <Button variant="default" onClick={() => { setQ(DEFAULT); setSavedId(null); setBack(null); }}>Reset</Button>
         </Group>
       </Group>
 
@@ -336,6 +344,7 @@ export function Explore() {
 
       <Card withBorder component="section" padding="md">
         <Group justify="space-between" wrap="wrap" mb="sm">
+          {back && <Button variant="default" size="xs" onClick={() => { setQ(back); setBack(null); }}>Back</Button>}
           <Summary rows={data?.rows} totals={data?.totals} metric={q.metric} compareRange={data?.compare_range} />
           {q.compare === "none" && q.dimensions.length > 0 && (
             <Group gap="sm">
@@ -369,7 +378,7 @@ export function Explore() {
         {data && data.rows.length > 0 && (
           q.compare !== "none" ? (
             <>
-              <ChangeTable result={data} label={q.dimensions[0] ? DIM_LABEL[q.dimensions[0]] : "Total"} onPick={(v) => drill(q.dimensions[0] ? { [q.dimensions[0]]: v } : {})} />
+              <ChangeTable result={data} label={q.dimensions[0] ? DIM_LABEL[q.dimensions[0]] : "Total"} onPick={pickCompare} />
               <Text c="dimmed" size="sm" mt="sm">Click a row to see the transactions in the current period. Exclude one-off purchases from the drawer to recalculate.</Text>
             </>
           ) : view === "chart" && chartable ? (
