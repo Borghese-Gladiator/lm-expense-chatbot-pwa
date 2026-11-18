@@ -442,6 +442,16 @@ const ROUTES: [string, string, Handler][] = [
   ],
   [
     "GET",
+    "trips/:id/transactions",
+    async ({ db }, { params }) =>
+      db.query(
+        `SELECT r.* FROM reportable r JOIN trip_transactions l ON l.transaction_id = r.id
+         WHERE l.trip_id = ? ORDER BY r.date DESC, r.id DESC`,
+        [id(params[0])],
+      ),
+  ],
+  [
+    "GET",
     "trips/:id/suggestions",
     async ({ db }, { params }) => {
       const out = await suggestForTrip(db, id(params[0]));

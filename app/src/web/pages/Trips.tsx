@@ -29,6 +29,7 @@ function TripPage({ trip, onBack }: { trip: Trip; onBack: () => void }) {
   const [idx, setIdx] = useState(0);
   const [busy, setBusy] = useState(false);
   const sugg = useAsync(() => api<Txn[]>(`/trips/${trip.id}/suggestions`), [trip.id, version]);
+  const linked = useAsync(() => api<Txn[]>(`/trips/${trip.id}/transactions`), [trip.id, version]);
   const left = (sugg.data ?? []).filter((t) => !rejected.has(t.id));
   const current = left[idx % Math.max(left.length, 1)];
   const chosen = left.filter((t) => !unchecked.has(t.id));
@@ -56,6 +57,19 @@ function TripPage({ trip, onBack }: { trip: Trip; onBack: () => void }) {
       <Anchor component="button" type="button" onClick={onBack} mb="sm">Back to trips</Anchor>
       <Title order={1} size="h2">{trip.name}</Title>
       <Text c="dimmed" mb="md">{day(trip.start_date)} – {day(trip.end_date)}</Text>
+      {(linked.data ?? []).length > 0 && (
+        <Table mb="md" aria-label="Trip transactions">
+          <Table.Tbody>
+            {(linked.data ?? []).map((t) => (
+              <Table.Tr key={t.id}>
+                <Table.Td>{t.merchant}</Table.Td>
+                <Table.Td>{day(t.date)}</Table.Td>
+                <Table.Td><Amount v={t.amount} /></Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+      )}
       {!reviewing && <Button onClick={() => setReviewing(true)}>Review suggestions</Button>}
       {reviewing && (
         <Stack>
