@@ -26,10 +26,11 @@ function TripPage({ trip, onBack }: { trip: Trip; onBack: () => void }) {
   const [version, setVersion] = useState(0);
   const [rejected, setRejected] = useState<Set<number>>(new Set());
   const [unchecked, setUnchecked] = useState<Set<number>>(new Set());
+  const [idx, setIdx] = useState(0);
   const [busy, setBusy] = useState(false);
   const sugg = useAsync(() => api<Txn[]>(`/trips/${trip.id}/suggestions`), [trip.id, version]);
   const left = (sugg.data ?? []).filter((t) => !rejected.has(t.id));
-  const current = left[0];
+  const current = left[idx % Math.max(left.length, 1)];
   const chosen = left.filter((t) => !unchecked.has(t.id));
 
   const add = async (items: Txn[]) => {
@@ -69,25 +70,21 @@ function TripPage({ trip, onBack }: { trip: Trip; onBack: () => void }) {
               <Group>
                 <Button loading={busy} onClick={() => add([current])}>Accept</Button>
                 <Button variant="default" onClick={() => setRejected((r) => new Set(r).add(current.id))}>Reject</Button>
+                <Button variant="subtle" disabled={left.length < 2} onClick={() => setIdx(idx + 1)}>Next</Button>
               </Group>
+              <Checkbox
+                mt="sm"
+                label="Include in Accept all"
+                checked={!unchecked.has(current.id)}
+                onChange={() => toggle(current.id)}
+              />
             </Paper>
           )}
           {left.length > 0 && (
-            <>
-              <Stack gap={4}>
-                {left.map((t) => (
-                  <Checkbox
-                    key={t.id}
-                    label={`${t.merchant} ${t.date}`}
-                    checked={!unchecked.has(t.id)}
-                    onChange={() => toggle(t.id)}
-                  />
-                ))}
-              </Stack>
-              <Group>
-                <Button variant="light" loading={busy} disabled={!chosen.length} onClick={() => add(chosen)}>Accept all</Button>
-              </Group>
-            </>
+            <Group>
+              <Button variant="light" loading={busy} disabled={!chosen.length} onClick={() => add(chosen)}>Accept all</Button>
+              <Text c="dimmed" size="sm">{chosen.length} selected</Text>
+            </Group>
           )}
         </Stack>
       )}
