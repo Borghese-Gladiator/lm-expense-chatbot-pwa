@@ -99,6 +99,10 @@ export function Explore() {
   const key = JSON.stringify(q);
   const { data, error, loading } = useAsync(() => runQuery(q), [key, version]);
 
+  const monthly = useAsync(
+    () => runQuery({ ...q, dimensions: ["month"], metric: "total", compare: "none", limit: 1000 }),
+    [key, version],
+  );
   const set = (patch: Partial<AnalyticsQuery>) => setQ((prev) => ({ ...prev, ...patch }));
   const setF = (patch: Partial<AnalyticsQuery["filters"]>) => setQ((prev) => ({ ...prev, filters: { ...prev.filters, ...patch } }));
 
@@ -342,6 +346,8 @@ export function Explore() {
         </Stack>
       </Card>
 
+      <SummaryCards months={monthly.data?.rows} change={q.compare === "none" ? undefined : data?.totals?.pct} />
+
       <Card withBorder component="section" padding="md">
         <Group justify="space-between" wrap="wrap" mb="sm">
           {back && <Button variant="default" size="xs" onClick={() => { setQ(back); setBack(null); }}>Back</Button>}
@@ -395,6 +401,27 @@ export function Explore() {
         )}
       </Card>
     </Stack>
+  );
+}
+
+function SummaryCards({ months, change }: { months?: QueryRow[]; change?: number | null }) {
+  const total = months?.reduce((a, r) => a + (r.value ?? 0), 0);
+  const count = months?.reduce((a, r) => a + r.n, 0);
+  const cards: [string, string][] = [
+    ["Total", total == null ? "—" : money(total)],
+    ["Monthly average", total == null || !months?.length ? "—" : money(total / months.length)],
+    ["Change", change == null ? "—" : pct(change)],
+    ["Count", count == null ? "—" : count.toLocaleString()],
+  ];
+  return (
+    <Group gap="md" grow>
+      {cards.map(([label, value]) => (
+        <Card key={label} withBorder padding="md" aria-label={label}>
+          <Text size="sm" c="dimmed">{label}</Text>
+          <Text fw={600} size="xl" style={NUM}>{value}</Text>
+        </Card>
+      ))}
+    </Group>
   );
 }
 
