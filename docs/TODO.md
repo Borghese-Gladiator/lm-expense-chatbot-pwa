@@ -6,7 +6,7 @@ The work items are in order inside each section. Requirement IDs refer to [PRD.m
 
 - [ ] Test Plaid with sandbox keys. Connect a sandbox bank, sync, and check that pending, posted, and removed rows are correct (BANK-01).
 - [ ] Test Ask with a real API key. Check that the model returns a valid `AnalyticsQuery` for 10 typical questions.
-- [ ] Delete `app/public/sw.js`. It is an old service worker build. Nothing in the app registers it or refers to it.
+- [x] Delete `app/public/sw.js`. The file is gone, and `GET /sw.js` returns 404.
 
 ## Usability
 
