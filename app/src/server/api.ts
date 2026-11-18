@@ -15,6 +15,7 @@ import { loadSettings, type Settings } from "./config";
 import { CsvImportSchema, importCsv } from "./csv";
 import { one, openDb, scalar, type Db, type Row } from "./db";
 import * as plaid from "./plaid";
+import { suggestForTrip } from "./suggest";
 import { applyRule, createRule, previewRule, RuleIn, undoExecution } from "./rules";
 
 export interface Ctx {
@@ -437,6 +438,15 @@ const ROUTES: [string, string, Handler][] = [
         [tripId, b.transaction_id, b.amount ?? null],
       );
       return { ok: true };
+    },
+  ],
+  [
+    "GET",
+    "trips/:id/suggestions",
+    async ({ db }, { params }) => {
+      const out = await suggestForTrip(db, id(params[0]));
+      if (!out) throw new HttpError(404, "trip not found");
+      return out;
     },
   ],
   [
