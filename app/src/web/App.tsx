@@ -9,6 +9,7 @@ import { Explore } from "./pages/Explore";
 import { Overview } from "./pages/Overview";
 import { Settings } from "./pages/Settings";
 import { Transactions } from "./pages/Transactions";
+import { Trips } from "./pages/Trips";
 import { Ctx, DrilldownDrawer, useMeta } from "./shared";
 import { TxnDetail } from "./TxnDetail";
 
@@ -16,6 +17,7 @@ const PAGES = {
   overview: { label: "Overview", el: Overview },
   explore: { label: "Explore", el: Explore },
   transactions: { label: "Transactions", el: Transactions },
+  trips: { label: "Trips", el: Trips },
   accounts: { label: "Accounts", el: Accounts },
   settings: { label: "Settings", el: Settings },
 } as const;
@@ -61,7 +63,7 @@ export default function App() {
   }, [meta]);
 
   const Page = PAGES[page].el;
-  const empty = meta && meta.accounts.length === 0 && page !== "accounts" && page !== "settings";
+  const empty = meta && meta.accounts.length === 0 && page !== "accounts" && page !== "settings" && page !== "trips";
 
   return (
     <Ctx.Provider value={{ meta, reloadMeta, openDrill: setDrill, openTxn: setTxnId, version, bump }}>
