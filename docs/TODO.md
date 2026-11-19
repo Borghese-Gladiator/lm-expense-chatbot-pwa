@@ -16,16 +16,16 @@ The work items are in order inside each section. Requirement IDs refer to [PRD.m
 
 ## Spending analytics
 
-- [ ] **Category to merchant drill-down** (EXP-07). In the comparison table, a click on a category opens the same comparison grouped by merchant, with that category as a filter. Today a click opens the transaction drawer.
-- [ ] **Explore summary cards** (EXP-10). Show total, average for each month, change, and count above the chart.
+- [x] **Category to merchant drill-down** (EXP-07). In the comparison table, a click on a category opens the same comparison grouped by merchant, with that category as a filter. Today a click opens the transaction drawer.
+- [x] **Explore summary cards** (EXP-10). Show total, average for each month, change, and count above the chart.
 
 ## Trips
 
-- [ ] Add `trips` and `trip_transactions (trip_id, transaction_id, amount NULL = full amount)` (TRIP-01, TRIP-09).
-- [ ] Add Trips CRUD API and the Trips list page.
-- [ ] Add trip suggestions. Score candidates from the date window, the pre-trip window, travel categories and merchants, the currency, and the Plaid location. Exclude categories with kind `transfer` and recurring charges.
-- [ ] Add the review screen with accept or reject, one at a time or in bulk.
-- [ ] Add the trip summary page. It uses the existing `AnalyticsQuery` with a trip filter.
+- [x] Add `trips` and `trip_transactions (trip_id, transaction_id, amount NULL = full amount)` (TRIP-01, TRIP-09).
+- [x] Add Trips CRUD API and the Trips list page.
+- [x] Add trip suggestions. Score candidates from the date window, the pre-trip window, travel categories and merchants, the currency, and the Plaid location. Exclude categories with kind `transfer` and recurring charges.
+- [x] Add the review screen with accept or reject, one at a time or in bulk.
+- [x] Add the trip summary page. It uses the existing `AnalyticsQuery` with a trip filter.
 - [ ] Add `trip` as a filter and a dimension in Explore (TRIP-12, EXP-05).
 - [ ] Make sure that Plaid sync keeps trip links when a transaction changes (TRIP-08). A removed Plaid row deletes its link.
 
