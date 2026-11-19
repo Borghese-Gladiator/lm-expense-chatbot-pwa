@@ -43,8 +43,13 @@ async function catalog(db: Db): Promise<string> {
   ].join("\n");
 }
 
-export async function ask(db: Db, settings: Settings, question: string): Promise<AskResult> {
-  const client = new Anthropic({ apiKey: settings.anthropicApiKey, timeout: 60_000, maxRetries: 2 });
+export async function ask(db: Db, settings: Settings, question: string, fetchFn?: typeof fetch): Promise<AskResult> {
+  const client = new Anthropic({
+    apiKey: settings.anthropicApiKey,
+    timeout: 60_000,
+    maxRetries: 2,
+    ...(fetchFn ? { fetch: fetchFn } : {}),
+  });
   const response = await client.messages.parse({
     model: settings.model,
     max_tokens: 16000,

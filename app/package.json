@@ -8,6 +8,8 @@
     "build": "next build",
     "start": "next start",
     "test": "vitest run",
+    "test:pg": "bash scripts/test-pg.sh",
+    "test:e2e": "playwright test",
     "check-types": "tsc --noEmit",
     "seed": "tsx scripts/seed-demo.ts",
     "setup": "npm install && tsx scripts/setup.ts"
@@ -28,6 +30,7 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@playwright/test": "1.65.1",
     "@types/node": "24.19.2",
     "@types/pg": "8.23.1",
     "@types/react": "19.3.0",

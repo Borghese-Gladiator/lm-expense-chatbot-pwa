@@ -1,6 +1,15 @@
 import { categoryIdFor, openDb, scalar, type Db } from "@/server/db";
 
-export const memoryDb = () => openDb({ databaseUrl: "", pgliteDir: "" }, true);
+const TABLES =
+  "not_duplicates, rule_executions, rules, transactions, accounts, categories, plaid_items, sync_runs, saved_queries, idempotency_keys";
+
+export async function memoryDb(): Promise<Db> {
+  const url = process.env.TEST_DATABASE_URL;
+  if (!url) return openDb({ databaseUrl: "", pgliteDir: "" }, true);
+  const db = await openDb({ databaseUrl: url, pgliteDir: "" });
+  await db.query(`TRUNCATE ${TABLES} RESTART IDENTITY`);
+  return db;
+}
 
 export const addAccount = async (db: Db, name = "Checking") =>
   Number(await scalar(db, "INSERT INTO accounts (name) VALUES (?) RETURNING id", [name]));
