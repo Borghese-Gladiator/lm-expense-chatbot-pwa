@@ -99,6 +99,10 @@ export function Explore() {
   const key = JSON.stringify(q);
   const { data, error, loading } = useAsync(() => runQuery(q), [key, version]);
 
+  const monthly = useAsync(
+    () => runQuery({ ...q, dimensions: ["month"], metric: "total", compare: "none", limit: 1000 }),
+    [key, version],
+  );
   const set = (patch: Partial<AnalyticsQuery>) => setQ((prev) => ({ ...prev, ...patch }));
   const setF = (patch: Partial<AnalyticsQuery["filters"]>) => setQ((prev) => ({ ...prev, filters: { ...prev.filters, ...patch } }));
 
@@ -134,6 +138,14 @@ export function Explore() {
   const excludeCategory = (name: string) => {
     const ids = (meta?.categories ?? []).filter((c) => c.name === name).map((c) => c.id);
     if (ids.length) setF({ exclude_category_ids: [...(q.filters.exclude_category_ids ?? []), ...ids] });
+  };
+
+  const [back, setBack] = useState<AnalyticsQuery | null>(null);
+  const pickCompare = (v: string) => {
+    const ids = q.dimensions[0] === "category" ? (meta?.categories ?? []).filter((c) => c.name === v).map((c) => c.id) : [];
+    if (!ids.length) return drill(q.dimensions[0] ? { [q.dimensions[0]]: v } : {});
+    setBack(q);
+    setQ({ ...q, dimensions: ["merchant"], filters: { ...q.filters, category_ids: ids } });
   };
 
   const save = async (e: React.FormEvent) => {
@@ -199,7 +211,7 @@ export function Explore() {
               loadSaved();
             }}>Delete</Button>
           )}
-          <Button variant="default" onClick={() => { setQ(DEFAULT); setSavedId(null); }}>Reset</Button>
+          <Button variant="default" onClick={() => { setQ(DEFAULT); setSavedId(null); setBack(null); }}>Reset</Button>
         </Group>
       </Group>
 
@@ -334,8 +346,11 @@ export function Explore() {
         </Stack>
       </Card>
 
+      <SummaryCards months={monthly.data?.rows} change={q.compare === "none" ? undefined : data?.totals?.pct} />
+
       <Card withBorder component="section" padding="md">
         <Group justify="space-between" wrap="wrap" mb="sm">
+          {back && <Button variant="default" size="xs" onClick={() => { setQ(back); setBack(null); }}>Back</Button>}
           <Summary rows={data?.rows} totals={data?.totals} metric={q.metric} compareRange={data?.compare_range} />
           {q.compare === "none" && q.dimensions.length > 0 && (
             <Group gap="sm">
@@ -369,7 +384,7 @@ export function Explore() {
         {data && data.rows.length > 0 && (
           q.compare !== "none" ? (
             <>
-              <ChangeTable result={data} label={q.dimensions[0] ? DIM_LABEL[q.dimensions[0]] : "Total"} onPick={(v) => drill(q.dimensions[0] ? { [q.dimensions[0]]: v } : {})} />
+              <ChangeTable result={data} label={q.dimensions[0] ? DIM_LABEL[q.dimensions[0]] : "Total"} onPick={pickCompare} />
               <Text c="dimmed" size="sm" mt="sm">Click a row to see the transactions in the current period. Exclude one-off purchases from the drawer to recalculate.</Text>
             </>
           ) : view === "chart" && chartable ? (
@@ -386,6 +401,27 @@ export function Explore() {
         )}
       </Card>
     </Stack>
+  );
+}
+
+function SummaryCards({ months, change }: { months?: QueryRow[]; change?: number | null }) {
+  const total = months?.reduce((a, r) => a + (r.value ?? 0), 0);
+  const count = months?.reduce((a, r) => a + r.n, 0);
+  const cards: [string, string][] = [
+    ["Total", total == null ? "—" : money(total)],
+    ["Monthly average", total == null || !months?.length ? "—" : money(total / months.length)],
+    ["Change", change == null ? "—" : pct(change)],
+    ["Count", count == null ? "—" : count.toLocaleString()],
+  ];
+  return (
+    <Group gap="md" grow>
+      {cards.map(([label, value]) => (
+        <Card key={label} withBorder padding="md" aria-label={label}>
+          <Text size="sm" c="dimmed">{label}</Text>
+          <Text fw={600} size="xl" style={NUM}>{value}</Text>
+        </Card>
+      ))}
+    </Group>
   );
 }
 

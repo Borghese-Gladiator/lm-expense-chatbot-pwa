@@ -15,6 +15,7 @@ import { loadSettings, type Settings } from "./config";
 import { CsvImportSchema, importCsv } from "./csv";
 import { one, openDb, scalar, type Db, type Row } from "./db";
 import * as plaid from "./plaid";
+import { suggestForTrip } from "./suggest";
 import { applyRule, createRule, previewRule, RuleIn, undoExecution } from "./rules";
 
 export interface Ctx {
@@ -108,7 +109,14 @@ const CategoryIn = z.object({
   exclude_from_totals: z.boolean().default(false),
   archived: z.boolean().default(false),
 });
-const AskRequest = z.object({ question: z.string().min(3).max(500) });
+const TripIn = z.object({
+  name: z.string().min(1),
+  start_date: z.iso.date().nullish(),
+  end_date: z.iso.date().nullish(),
+});
+const TripPatch = TripIn.partial();
+const TripLinkIn = z.object({ transaction_id: z.number().int(), amount: z.number().positive().nullish() });
+const AskRequest =z.object({ question: z.string().min(3).max(500) });
 const PublicTokenIn = z.object({ public_token: z.string(), institution: z.string().nullish() });
 
 const id = (s: string) => {
@@ -369,6 +377,96 @@ const ROUTES: [string, string, Handler][] = [
       return { ok: true };
     },
   ],
+  [
+    "POST",
+    "trips",
+    async ({ db }, { body }) => {
+      const b = TripIn.parse(body);
+      return {
+        id: await scalar(db, "INSERT INTO trips (name, start_date, end_date) VALUES (?, ?, ?) RETURNING id", [
+          b.name,
+          b.start_date ?? null,
+          b.end_date ?? null,
+        ]),
+      };
+    },
+  ],
+  [
+    "GET",
+    "trips",
+    async ({ db }) =>
+      db.query(
+        `SELECT t.*, (SELECT COUNT(*) FROM trip_transactions l WHERE l.trip_id = t.id) AS link_count
+         FROM trips t ORDER BY t.start_date DESC NULLS LAST, t.id DESC`,
+      ),
+  ],
+  [
+    "PATCH",
+    "trips/:id",
+    async ({ db }, { params, body }) => {
+      const fields = Object.entries(TripPatch.parse(body)).filter(([k, v]) => v !== undefined && (v !== null || k !== "name"));
+      if (fields.length)
+        await db.query(`UPDATE trips SET ${fields.map(([k]) => `${k} = ?`).join(", ")} WHERE id = ?`, [
+          ...fields.map(([, v]) => v),
+          id(params[0]),
+        ]);
+      return { ok: true };
+    },
+  ],
+  [
+    "DELETE",
+    "trips/:id",
+    async ({ db }, { params }) => {
+      await db.query("DELETE FROM trips WHERE id = ?", [id(params[0])]);
+      return { ok: true };
+    },
+  ],
+  [
+    "POST",
+    "trips/:id/transactions",
+    async ({ db }, { params, body }) => {
+      const tripId = id(params[0]);
+      const b = TripLinkIn.parse(body);
+      if (!(await one(db, "SELECT 1 FROM trips WHERE id = ?", [tripId]))) throw new HttpError(404, "trip not found");
+      const txnAmount = await scalar<number | undefined>(db, "SELECT amount FROM transactions WHERE id = ?", [b.transaction_id]);
+      if (txnAmount === undefined) throw new HttpError(404, "transaction not found");
+      if (b.amount != null && b.amount > Math.abs(txnAmount))
+        throw new HttpError(422, "link amount is larger than the transaction amount");
+      await db.query(
+        `INSERT INTO trip_transactions (trip_id, transaction_id, amount) VALUES (?, ?, ?)
+         ON CONFLICT (trip_id, transaction_id) DO UPDATE SET amount = EXCLUDED.amount`,
+        [tripId, b.transaction_id, b.amount ?? null],
+      );
+      return { ok: true };
+    },
+  ],
+  [
+    "GET",
+    "trips/:id/transactions",
+    async ({ db }, { params }) =>
+      db.query(
+        `SELECT r.* FROM reportable r JOIN trip_transactions l ON l.transaction_id = r.id
+         WHERE l.trip_id = ? ORDER BY r.date DESC, r.id DESC`,
+        [id(params[0])],
+      ),
+  ],
+  [
+    "GET",
+    "trips/:id/suggestions",
+    async ({ db }, { params }) => {
+      const out = await suggestForTrip(db, id(params[0]));
+      if (!out) throw new HttpError(404, "trip not found");
+      return out;
+    },
+  ],
+  [
+    "DELETE",
+    "trips/:id/transactions/:id",
+    async ({ db }, { params }) => {
+      await db.query("DELETE FROM trip_transactions WHERE trip_id = ? AND transaction_id = ?", [id(params[0]), id(params[1])]);
+      return { ok: true };
+    },
+  ],
   ["GET", "duplicates", async ({ db }) => db.query(DUPLICATES)],
   [
     "POST",
@@ -520,7 +618,7 @@ const ROUTES: [string, string, Handler][] = [
     "data/delete-all",
     async ({ db }) => {
       await db.query(
-        "TRUNCATE not_duplicates, rule_executions, rules, transactions, accounts, categories, plaid_items, sync_runs, saved_queries, idempotency_keys RESTART IDENTITY",
+        "TRUNCATE trip_transactions, trips, not_duplicates,rule_executions, rules, transactions, accounts, categories, plaid_items, sync_runs, saved_queries, idempotency_keys RESTART IDENTITY",
       );
       return { ok: true };
     },
