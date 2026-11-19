@@ -1,7 +1,7 @@
 import { categoryIdFor, openDb, scalar, type Db } from "@/server/db";
 
 const TABLES =
-  "not_duplicates, rule_executions, rules, transactions, accounts, categories, plaid_items, sync_runs, saved_queries, idempotency_keys";
+  "trip_transactions, trips, not_duplicates, rule_executions, rules, transactions, accounts, categories, plaid_items, sync_runs, saved_queries, idempotency_keys";
 
 export async function memoryDb(): Promise<Db> {
   const url = process.env.TEST_DATABASE_URL;
