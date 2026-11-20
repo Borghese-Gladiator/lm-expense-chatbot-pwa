@@ -6,6 +6,7 @@
 import { z } from "zod";
 
 import { one, type Db, type Row } from "./db";
+import { tracked } from "./history";
 
 export const RuleIn = z.object({
   text_contains: z.string().trim().min(1).nullish(),
@@ -55,7 +56,9 @@ export async function applyRules(db: Db, ids: number[]): Promise<void> {
   if (!ids.length) return;
   const rules = await db.query<{ id: number }>("SELECT id FROM rules ORDER BY id");
   for (const { id } of rules)
-    await db.query(`UPDATE transactions t SET ${SET} FROM rules r WHERE r.id = ? AND t.id = ANY(?::bigint[]) AND ${MATCH}`, [id, ids]);
+    await tracked(db, ids, "rule", id, () =>
+      db.query(`UPDATE transactions t SET ${SET} FROM rules r WHERE r.id = ? AND t.id = ANY(?::bigint[]) AND ${MATCH}`, [id, ids]),
+    );
 }
 
 export const previewRule = (db: Db, ruleId: number): Promise<Row[]> =>
@@ -78,10 +81,10 @@ export const applyRule = (db: Db, ruleId: number) =>
       "INSERT INTO rule_executions (rule_id, old_values) VALUES (?, ?) RETURNING id",
       [ruleId, JSON.stringify(old)],
     );
-    await t.query(`UPDATE transactions t SET ${SET} FROM rules r WHERE r.id = ? AND t.id = ANY(?::bigint[])`, [
-      ruleId,
-      old.map((o) => o.id),
-    ]);
+    const oldIds = old.map((o) => Number(o.id));
+    await tracked(t, oldIds, "rule", ruleId, () =>
+      t.query(`UPDATE transactions t SET ${SET} FROM rules r WHERE r.id = ? AND t.id = ANY(?::bigint[])`, [ruleId, oldIds]),
+    );
     return { execution_id: Number(exec!.id), changed: old.length };
   });
 
@@ -90,13 +93,19 @@ export const undoExecution = (db: Db, execId: number) =>
     const exec = await one<{ undone_at: string | null }>(t, "SELECT undone_at FROM rule_executions WHERE id = ? FOR UPDATE", [execId]);
     if (!exec) return null;
     if (exec.undone_at) return { restored: 0 };
-    const rows = await t.query(
-      `UPDATE transactions t SET category_id = o.category_id, merchant = o.merchant, tags = o.tags,
-         reviewed = o.reviewed, updated_at = now()
-       FROM rule_executions e,
-            jsonb_to_recordset(e.old_values) AS o(id BIGINT, category_id BIGINT, merchant TEXT, tags TEXT[], reviewed BOOLEAN)
-       WHERE e.id = ? AND t.id = o.id RETURNING t.id`,
+    const ids = (await t.query<{ id: number }>(
+      "SELECT o.id FROM rule_executions e, jsonb_to_recordset(e.old_values) AS o(id BIGINT) WHERE e.id = ?",
       [execId],
+    )).map((r) => Number(r.id));
+    const rows = await tracked(t, ids, "undo", null, () =>
+      t.query(
+        `UPDATE transactions t SET category_id = o.category_id, merchant = o.merchant, tags = o.tags,
+           reviewed = o.reviewed, updated_at = now()
+         FROM rule_executions e,
+              jsonb_to_recordset(e.old_values) AS o(id BIGINT, category_id BIGINT, merchant TEXT, tags TEXT[], reviewed BOOLEAN)
+         WHERE e.id = ? AND t.id = o.id RETURNING t.id`,
+        [execId],
+      ),
     );
     await t.query("UPDATE rule_executions SET undone_at = now() WHERE id = ?", [execId]);
     return { restored: rows.length };

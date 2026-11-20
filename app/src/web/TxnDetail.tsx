@@ -30,9 +30,22 @@ interface Detail {
   updated_at: string;
 }
 
+interface Change {
+  id: number;
+  source: string;
+  rule_id: number | null;
+  field: string;
+  old_value: unknown;
+  new_value: unknown;
+  created_at: string;
+}
+
+const show = (v: unknown) => (v === null || v === "" ? "—" : Array.isArray(v) ? v.join(", ") || "—" : String(v));
+
 export function TxnDetail({ id, onClose }: { id: number; onClose: () => void }) {
   const { meta, bump, version } = useApp();
   const { data, error, loading } = useAsync(() => api<Detail>(`/transactions/${id}`), [id, version]);
+  const history = useAsync(() => api<Change[]>(`/transactions/${id}/history`), [id, version]);
   const [draft, setDraft] = useState<Partial<Detail> & { tagText?: string }>({});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -106,6 +119,26 @@ export function TxnDetail({ id, onClose }: { id: number; onClose: () => void }) 
         <Button onClick={save} disabled={Object.keys(draft).length === 0} loading={saving}>Save</Button>
         {saveError && <Text c="red" size="sm">{saveError}</Text>}
       </Group>
+      <Title order={3} size="h6" mt="xl" mb="xs">History</Title>
+      {history.data?.length ? (
+        <Table fz="sm" withRowBorders={false} verticalSpacing={2}>
+          <Table.Tbody>
+            {history.data.map((c) => {
+              const label = (x: unknown) =>
+                c.field === "category_id" && x !== null ? (meta?.categories.find((k) => k.id === Number(x))?.name ?? String(x)) : show(x);
+              return (
+                <Table.Tr key={c.id}>
+                  <Table.Td>{c.created_at.slice(0, 16).replace("T", " ")}</Table.Td>
+                  <Table.Td>{c.source === "rule" ? `Rule ${c.rule_id}` : c.source === "undo" ? "Undo" : "You"}</Table.Td>
+                  <Table.Td>{c.field === "category_id" ? "category" : c.field}: {label(c.old_value)} → {label(c.new_value)}</Table.Td>
+                </Table.Tr>
+              );
+            })}
+          </Table.Tbody>
+        </Table>
+      ) : (
+        <Text size="sm" c="dimmed">No changes yet</Text>
+      )}
       <Title order={3} size="h6" mt="xl" mb="xs">Source record</Title>
       <Table fz="sm" withRowBorders={false} verticalSpacing={2}>
         <Table.Tbody>
