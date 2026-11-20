@@ -14,6 +14,7 @@ import { mockAsk, mockFetch, mockSettings, seedIfEmpty } from "./mock";
 import { loadSettings, type Settings } from "./config";
 import { CsvImportSchema, importCsv } from "./csv";
 import { one, openDb, scalar, type Db, type Row } from "./db";
+import { tracked } from "./history";
 import * as plaid from "./plaid";
 import { suggestForTrip } from "./suggest";
 import { applyRule, createRule, previewRule, RuleIn, undoExecution } from "./rules";
@@ -142,7 +143,9 @@ async function patchTxns(db: Db, ids: number[], body: z.infer<typeof TxnPatch>) 
   if (body.clear_type) sets.push("type = NULL");
   if (!sets.length) return;
   sets.push("user_edited = TRUE", "updated_at = now()");
-  await db.query(`UPDATE transactions SET ${sets.join(", ")} WHERE id = ANY(?::bigint[])`, [...params, ids]);
+  await tracked(db, ids, "manual", null, () =>
+    db.query(`UPDATE transactions SET ${sets.join(", ")} WHERE id = ANY(?::bigint[])`, [...params, ids]),
+  );
 }
 
 function plaidFailure(e: unknown): never {
@@ -329,6 +332,16 @@ const ROUTES: [string, string, Handler][] = [
       if (!found) throw new HttpError(404, "transaction not found");
       return { ...found, children: await db.query("SELECT * FROM transactions WHERE parent_id = ?", [tid]) };
     },
+  ],
+  [
+    "GET",
+    "transactions/:id/history",
+    async ({ db }, { params }) =>
+      db.query(
+        `SELECT h.id, h.source, h.rule_id, h.field, h.old_value, h.new_value, h.created_at
+         FROM transaction_changes h WHERE h.transaction_id = ? ORDER BY h.id DESC`,
+        [id(params[0])],
+      ),
   ],
   [
     "POST",
@@ -618,7 +631,7 @@ const ROUTES: [string, string, Handler][] = [
     "data/delete-all",
     async ({ db }) => {
       await db.query(
-        "TRUNCATE trip_transactions, trips, not_duplicates,rule_executions, rules, transactions, accounts, categories, plaid_items, sync_runs, saved_queries, idempotency_keys RESTART IDENTITY",
+        "TRUNCATE transaction_changes, trip_transactions, trips, not_duplicates,rule_executions, rules, transactions, accounts, categories, plaid_items, sync_runs, saved_queries, idempotency_keys RESTART IDENTITY",
       );
       return { ok: true };
     },
