@@ -1,7 +1,7 @@
 # v0.0.1: expense-tracker (archived)
 
 Imported from `Borghese-Gladiator/expense-tracker` (May to Nov 2024) with its full git history
-(`git subtree`, no squash), so `git log -- poc_v0.0.1` shows how it evolved. The standalone repo was deleted after this import.
+(`git subtree`, no squash), so `git log -- z_poc_v0.0.1` shows how it evolved. The standalone repo was deleted after this import.
 The original README is kept as [README.md](./README.md).
 
 ## What it was
@@ -16,7 +16,7 @@ The original README is kept as [README.md](./README.md).
 ## Approach and lessons
 - Dash was easier than Streamlit for building reports (icons, customization, PNG export).
 - Data access was split from statistics via a datasource interface. The idea carried forward into later versions.
-- Reports were fixed and predefined. That limit is what led to the chat approach in `poc_v0.1/` and `app_v0.2/`,
+- Reports were fixed and predefined. That limit is what led to the chat approach in `z_poc_v0.1/` and `z_app_v0.2/`,
   and then to the Plaid-backed `app/`.
 
 ## Running it

@@ -62,7 +62,7 @@ Anomaly Detection:
 
 1. **Clone and install dependencies**
    ```bash
-   cd app_v0.2
+   cd z_app_v0.2
    yarn install
    ```
 
@@ -239,7 +239,7 @@ The app is PWA-ready and will work offline after initial load.
 
 ### Phase 4: Function Calling & API Integration
 1. **Create Tool Definitions**
-   - Based on Python POC in `/poc_v0.1/src/tools.py`
+   - Based on Python POC in `/z_poc_v0.1/src/tools.py`
    - OpenAI-format function schemas
    - 9 financial analysis tools
    - Mock data generators for testing
@@ -336,7 +336,7 @@ npx shadcn@latest add https://www.shadcn.io/registry/ai-chatbot.json
 
 ## Acknowledgments
 
-- Python POC implementation in `/poc_v0.1/src/tools.py`
+- Python POC implementation in `/z_poc_v0.1/src/tools.py`
 - shadcn/ui for excellent component library
 - WebLLM team for browser-based LLM inference
 - Lunch Money for comprehensive financial API

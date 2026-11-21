@@ -19,7 +19,7 @@ This repository contains three versions. The current version is in `app/`.
 ### 🔍 [`app/`](./app) - Spend Lens (SL), current version
 A standalone, analytics-first finance app with Plaid bank sync. It does not need Lunch Money. It is one Next.js app with PostgreSQL and ECharts, and it deploys to Vercel. See [app/README.md](./app/README.md) and [app/PRD.md](./app/PRD.md).
 
-### 📱 [`app_v0.2/`](./app_v0.2) - WebLLM PWA (JavaScript), v0.2
+### 📱 [`z_app_v0.2/`](./z_app_v0.2) - WebLLM PWA (JavaScript), v0.2
 **Status:** ✅ Complete and production-ready
 
 Modern web app built with:
@@ -37,7 +37,7 @@ Modern web app built with:
 - Model selection UI with progress tracking
 - Toast notifications and loading states
 
-[See full documentation →](./app_v0.2/README.md)
+[See full documentation →](./z_app_v0.2/README.md)
 
 **Screenshots:**
 
@@ -49,7 +49,7 @@ Mobile
 
 ---
 
-### 🐍 [`poc_v0.1/`](./poc_v0.1) - Proof of Concept (Python)
+### 🐍 [`z_poc_v0.1/`](./z_poc_v0.1) - Proof of Concept (Python)
 **Status:** Initial prototype
 
 Python prototype using:
@@ -60,7 +60,7 @@ Python prototype using:
 
 **Directory Structure:**
 ```
-poc_v0.1/
+z_poc_v0.1/
 ├── src/
 │   ├── app.py          # Streamlit chat application
 │   ├── tools.py        # Financial analysis tools (9 functions)
@@ -74,7 +74,7 @@ poc_v0.1/
 
 **Quick Start:**
 ```bash
-cd poc_v0.1
+cd z_poc_v0.1
 
 # Install Ollama and pull model
 ollama pull llama3.1:8b
@@ -94,27 +94,27 @@ streamlit run src/app.py
 This POC proved the concept and tool definitions that were later implemented in the JavaScript MVP.
 
 ---
-### 📊 [`poc_v0.0.1/`](./poc_v0.0.1) - Report generator (Python), v0.0.1
+### 📊 [`z_poc_v0.0.1/`](./z_poc_v0.0.1) - Report generator (Python), v0.0.1
 **Status:** Archived (imported from the standalone `expense-tracker` repo with full git history)
 
-The earliest attempt, from May to Nov 2024. It generated monthly and year-to-date spending reports from Lunch Money using a Dash/Streamlit client and a small `expense_tracker` Python package. It also included Docker and Kubernetes configs and one-off PDF/CSV transaction extraction scripts. See [poc_v0.0.1/ARCHIVE.md](./poc_v0.0.1/ARCHIVE.md).
+The earliest attempt, from May to Nov 2024. It generated monthly and year-to-date spending reports from Lunch Money using a Dash/Streamlit client and a small `expense_tracker` Python package. It also included Docker and Kubernetes configs and one-off PDF/CSV transaction extraction scripts. See [z_poc_v0.0.1/ARCHIVE.md](./z_poc_v0.0.1/ARCHIVE.md).
 
 ---
 
 ## Quick Start
 
-These instructions are for running the **app_v0.2/** MVP. For the Python POC, see the [POC section](#-poc_v01---proof-of-concept-python) above.
+These instructions are for running the **z_app_v0.2/** MVP. For the Python POC, see the [POC section](#-z_poc_v01---proof-of-concept-python) above.
 
 ### Prerequisites
 - Node.js 18+ and Yarn
 - A modern browser with WebGPU support (Chrome 113+, Edge 113+)
 - (Optional) Lunch Money API key from [my.lunchmoney.app/developers](https://my.lunchmoney.app/developers)
 
-### Running the MVP (app_v0.2/)
+### Running the MVP (z_app_v0.2/)
 
 ```bash
 # Navigate to app directory
-cd app_v0.2
+cd z_app_v0.2
 
 # Install dependencies
 yarn install
@@ -136,20 +136,20 @@ Open [http://localhost:3000](http://localhost:3000)
 
 Without an API key, the app uses mock data for demonstration.
 
-See [app_v0.2/README.md](./app_v0.2/README.md) for detailed documentation.
+See [z_app_v0.2/README.md](./z_app_v0.2/README.md) for detailed documentation.
 
 ---
 
 ## Tech Stack
 
-### MVP (app_v0.2/)
+### MVP (z_app_v0.2/)
 - **Frontend**: Next.js 16, React, Tailwind CSS v4
 - **AI**: WebLLM, Hermes models with function calling
 - **UI**: shadcn/ui, Radix UI primitives
 - **PWA**: Serwist service worker
 - **API**: Lunch Money REST API with caching
 
-### POC (poc_v0.1/)
+### POC (z_poc_v0.1/)
 - **Framework**: Streamlit
 - **AI**: Ollama
 - **Language**: Python
@@ -247,13 +247,13 @@ Cache key: `{startDate}_{endDate}`
 - Semantic versioning commits
 - Production deployment
 
-See [How It Was Built](./app_v0.2/README.md#how-it-was-built) for detailed steps.
+See [How It Was Built](./z_app_v0.2/README.md#how-it-was-built) for detailed steps.
 
 ---
 
 ## Environment Variables
 
-Create `app_v0.2/.env.local`:
+Create `z_app_v0.2/.env.local`:
 
 ```bash
 # Lunch Money API Key (optional)
@@ -316,7 +316,7 @@ Without an API key, the app uses mock data automatically.
 - Check Lunch Money API status
 - App auto-falls back to mock data
 
-See [full troubleshooting guide](./app_v0.2/README.md#troubleshooting) for more.
+See [full troubleshooting guide](./z_app_v0.2/README.md#troubleshooting) for more.
 
 ---
 
@@ -326,7 +326,7 @@ See [full troubleshooting guide](./app_v0.2/README.md#troubleshooting) for more.
 
 ## Acknowledgments
 
-- Python POC implementation in `poc_v0.1/src/tools.py`
+- Python POC implementation in `z_poc_v0.1/src/tools.py`
 - [shadcn/ui](https://ui.shadcn.com) for excellent component library
 - [WebLLM](https://webllm.mlc.ai/) team for browser-based LLM inference
 - [Lunch Money](https://lunchmoney.app) for comprehensive financial API
