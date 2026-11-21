@@ -105,6 +105,7 @@ const AccountPatch = z.object({
   archived: z.boolean().nullish(),
   history_cutover: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
 });
+const ItemPatch = z.object({ institution: z.string().trim().min(1).max(120) });
 const MergeIn = z.object({ into_id: z.number().int() });
 const ResolveIn = z.object({ keep: z.number().int(), remove: z.number().int(), not_duplicate: z.boolean().default(false) });
 const DUPLICATES = `
@@ -781,12 +782,12 @@ const ROUTES: [string, string, Handler][] = [
     "PATCH",
     "plaid/items/:id",
     async ({ db }, { params, body }) => {
-      const { name } = z.object({ name: z.string().trim().min(1).max(100) }).parse(body);
+      const b = ItemPatch.parse(body);
       const itemId = id(params[0]);
       await db.tx(async (t) => {
-        const rows = await t.query("UPDATE plaid_items SET institution = ? WHERE id = ? RETURNING id", [name, itemId]);
-        if (!rows.length) throw new HttpError(404, "connection not found");
-        await t.query("UPDATE accounts SET institution = ? WHERE plaid_item_id = ?", [name, itemId]);
+        const rows = await t.query("UPDATE plaid_items SET institution = ? WHERE id = ? RETURNING id", [b.institution, itemId]);
+        if (rows.length === 0) throw new HttpError(404, "connection not found");
+        await t.query("UPDATE accounts SET institution = ? WHERE plaid_item_id = ?", [b.institution, itemId]);
       });
       return { ok: true };
     },

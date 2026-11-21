@@ -153,6 +153,15 @@ export function Accounts() {
       return `Synced ${r.items.length - failed} of ${r.items.length} connections. ${added} new transactions.${failed ? ` ${failed} failed.` : ""}`;
     });
 
+  const saveName = () => {
+    const r = rename!;
+    setRename(null);
+    run("Renaming", async () => {
+      await api(`/plaid/items/${r.id}`, { institution: r.value.trim() }, "PATCH");
+      return `Renamed to ${r.value.trim()}.`;
+    });
+  };
+
   const syncItem = (id: number) =>
     run("Syncing", async () => {
       const r = await api<{ added: number; modified: number; removed: number }>(`/plaid/items/${id}/sync`, {});
@@ -200,8 +209,8 @@ export function Accounts() {
               {g.item && (
                 <Group gap="xs" wrap="nowrap">
                   {g.item.status === "reconnect" && <Button size="xs" disabled={busy} onClick={() => reconnect(g.item!.id)}>Reconnect</Button>}
+                  <Button size="xs" variant="default" disabled={busy} onClick={() => setRename({ id: g.item!.id, value: g.title })}>Rename</Button>
                   <Button size="xs" variant="default" disabled={busy} onClick={() => syncItem(g.item!.id)}>Sync now</Button>
-                  <Button size="xs" variant="subtle" disabled={busy} onClick={() => setRename({ id: g.item!.id, value: g.title })}>Rename</Button>
                   <Menu position="bottom-end">
                     <Menu.Target>
                       <Button size="xs" variant="subtle" color="red" disabled={busy}>Disconnect</Button>
@@ -256,17 +265,9 @@ export function Accounts() {
       </Section>
 
       <Modal opened={rename !== null} onClose={() => setRename(null)} title="Rename connection">
-        <form onSubmit={(e) => {
-          e.preventDefault();
-          const r = rename!;
-          setRename(null);
-          run("Renaming", async () => {
-            await api(`/plaid/items/${r.id}`, { name: r.value }, "PATCH");
-            return `Renamed to ${r.value}.`;
-          });
-        }}>
+        <form onSubmit={(e) => { e.preventDefault(); if (rename?.value.trim()) saveName(); }}>
           <Stack gap="sm">
-            <TextInput data-autofocus required label="Name" value={rename?.value ?? ""} onChange={(e) => rename && setRename({ ...rename, value: e.currentTarget.value })} />
+            <TextInput data-autofocus label="Name" maxLength={120} value={rename?.value ?? ""} onChange={(e) => rename && setRename({ ...rename, value: e.currentTarget.value })} />
             <Group justify="flex-end">
               <Button variant="default" onClick={() => setRename(null)}>Cancel</Button>
               <Button type="submit" disabled={!rename?.value.trim()}>Save</Button>
