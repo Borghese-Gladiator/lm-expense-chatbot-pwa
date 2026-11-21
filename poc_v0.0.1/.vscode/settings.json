@@ -1,0 +1,6 @@
+{
+  "python.testing.unittestArgs": [],
+  "python.testing.unittestEnabled": true,
+  "python.testing.pytestEnabled": false,
+  "python.experiments.optOutFrom": ["pythonTestAdapter"]
+}
