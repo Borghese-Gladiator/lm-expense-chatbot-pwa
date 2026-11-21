@@ -286,7 +286,7 @@ async function apply(db: Db, data: Awaited<ReturnType<typeof fetchAll>>): Promis
       ],
     );
     newIds.push(...ins.map((r) => Number(r.id)));
-    if (ins.length && t.pending_transaction_id)
+    if (ins.length && t.pending_transaction_id) {
       await db.query(
         `INSERT INTO trip_transactions (trip_id, transaction_id, amount)
          SELECT l.trip_id, ?, l.amount FROM trip_transactions l
@@ -294,10 +294,28 @@ async function apply(db: Db, data: Awaited<ReturnType<typeof fetchAll>>): Promis
          ON CONFLICT DO NOTHING`,
         [ins[0].id, t.pending_transaction_id],
       );
+      await db.query(
+        `UPDATE transactions ch SET parent_id = ?, date = ?, is_pending = ? FROM transactions p
+         WHERE ch.parent_id = p.id AND p.source = 'plaid' AND p.source_id = ? AND p.amount = ?`,
+        [ins[0].id, t.date, Boolean(t.pending), t.pending_transaction_id, -Number(t.amount)],
+      );
+    }
     added++;
   }
   await applyRules(db, newIds);
   for (const t of data.modified) {
+    await db.query(
+      `WITH gone AS (
+         DELETE FROM transactions ch USING transactions p
+         WHERE ch.parent_id = p.id AND p.source = 'plaid' AND p.source_id = ? AND p.amount <> ? RETURNING p.id)
+       UPDATE transactions SET reviewed = FALSE WHERE id IN (SELECT id FROM gone)`,
+      [t.transaction_id, -Number(t.amount)],
+    );
+    await db.query(
+      `UPDATE transactions ch SET date = ?, is_pending = ? FROM transactions p
+       WHERE ch.parent_id = p.id AND p.source = 'plaid' AND p.source_id = ?`,
+      [t.date, Boolean(t.pending), t.transaction_id],
+    );
     await db.query(
       `UPDATE transactions SET
          date = ?, amount = ?, payee_raw = ?, is_pending = ?, raw = ?, updated_at = now(),
@@ -318,7 +336,11 @@ async function apply(db: Db, data: Awaited<ReturnType<typeof fetchAll>>): Promis
     modified++;
   }
   for (const r of data.removed) {
-    await db.query("DELETE FROM transactions WHERE source = 'plaid' AND source_id = ?", [r.transaction_id]);
+    await db.query(
+      `DELETE FROM transactions WHERE (source = 'plaid' AND source_id = ?)
+         OR parent_id IN (SELECT id FROM transactions WHERE source = 'plaid' AND source_id = ?)`,
+      [r.transaction_id, r.transaction_id],
+    );
     removed++;
   }
   return [added, modified, removed];

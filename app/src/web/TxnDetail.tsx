@@ -1,5 +1,5 @@
 import {
-  Button, Checkbox, Code, Drawer, Group, NativeSelect, SimpleGrid, Table, Text, Textarea, TextInput, Title,
+  Alert, Button, Checkbox, Code, Drawer, Group, NativeSelect, NumberInput, SimpleGrid, Table, Text, Textarea, TextInput, Title,
 } from "@mantine/core";
 import { useState } from "react";
 
@@ -28,7 +28,16 @@ interface Detail {
   raw: unknown;
   created_at: string;
   updated_at: string;
+  parent_id: number | null;
+  children: { id: number; amount: number; category_id: number | null }[];
 }
+
+interface Part {
+  amount: number | string;
+  category_id: string;
+}
+
+const cents = (n: number | string) => Math.round(Number(n || 0) * 100);
 
 interface Change {
   id: number;
@@ -49,6 +58,8 @@ export function TxnDetail({ id, onClose }: { id: number; onClose: () => void }) 
   const [draft, setDraft] = useState<Partial<Detail> & { tagText?: string }>({});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [parts, setParts] = useState<Part[] | null>(null);
+  const [splitError, setSplitError] = useState<string | null>(null);
 
   const shell = (title: React.ReactNode, body: React.ReactNode) => (
     <Drawer opened onClose={onClose} position="right" size="xl" title={title} closeButtonProps={{ "aria-label": "Close" }}>
@@ -80,6 +91,36 @@ export function TxnDetail({ id, onClose }: { id: number; onClose: () => void }) 
     } finally {
       setSaving(false);
     }
+  };
+
+  const dir = data.amount < 0 ? -1 : 1;
+  const total = Math.abs(cents(data.amount));
+  const remainder = total - (parts ?? []).reduce((n, p) => n + cents(p.amount), 0);
+  const startSplit = () => {
+    setSplitError(null);
+    setParts(
+      data.children.length
+        ? data.children.map((c) => ({ amount: Math.abs(c.amount) * (c.amount * dir < 0 ? -1 : 1), category_id: c.category_id == null ? "" : String(c.category_id) }))
+        : [{ amount: Math.abs(data.amount), category_id: "" }, { amount: "", category_id: "" }],
+    );
+  };
+  const saveSplit = async () => {
+    setSplitError(null);
+    try {
+      await api(`/transactions/${id}/split`, {
+        parts: parts!.map((p) => ({ amount: dir * Number(p.amount), category_id: p.category_id ? Number(p.category_id) : null })),
+      }, "PUT");
+      setParts(null);
+      bump();
+    } catch (e) {
+      setSplitError((e as Error).message);
+    }
+  };
+  const removeSplit = async () => {
+    if (!confirm("Remove the split? The parts are deleted and this transaction counts again.")) return;
+    await api(`/transactions/${id}/split`, undefined, "DELETE");
+    setParts(null);
+    bump();
   };
 
   return shell(
@@ -119,6 +160,53 @@ export function TxnDetail({ id, onClose }: { id: number; onClose: () => void }) 
         <Button onClick={save} disabled={Object.keys(draft).length === 0} loading={saving}>Save</Button>
         {saveError && <Text c="red" size="sm">{saveError}</Text>}
       </Group>
+      <Title order={3} size="h6" mt="xl" mb="xs">Split</Title>
+      {data.parent_id != null ? (
+        <Text size="sm" c="dimmed">This is one part of a split. Open the original transaction to change the split.</Text>
+      ) : parts ? (
+        <>
+          {parts.map((p, i) => (
+            <Group key={i} gap="sm" mb="xs" align="flex-end" wrap="nowrap">
+              <NumberInput label={i === 0 ? "Amount" : undefined} aria-label={`Part ${i + 1} amount`} decimalScale={2} fixedDecimalScale hideControls value={p.amount} onChange={(v) => setParts(parts.map((x, j) => (j === i ? { ...x, amount: v } : x)))} w={120} />
+              <NativeSelect label={i === 0 ? "Category" : undefined} aria-label={`Part ${i + 1} category`} value={p.category_id} onChange={(e) => setParts(parts.map((x, j) => (j === i ? { ...x, category_id: e.target.value } : x)))} style={{ flex: 1 }}>
+                <option value="">Uncategorized</option>
+                {meta?.categories.filter((c) => !c.archived).map((c) => (
+                  <option key={c.id} value={c.id}>{c.group_name ? `${c.group_name} › ` : ""}{c.name}</option>
+                ))}
+              </NativeSelect>
+              <Button variant="subtle" color="red" size="xs" disabled={parts.length <= 2} aria-label={`Remove part ${i + 1}`} onClick={() => setParts(parts.filter((_, j) => j !== i))}>Remove</Button>
+            </Group>
+          ))}
+          <Text size="sm" c={remainder === 0 ? "dimmed" : "red"} role="status">
+            {remainder === 0 ? "The parts add up." : `${money2(Math.abs(remainder) / 100)} ${remainder > 0 ? "left to assign" : "over the total"}.`}
+          </Text>
+          {splitError && <Alert color="red" mt="xs" role="alert">{splitError}</Alert>}
+          <Group mt="sm">
+            <Button size="xs" variant="default" disabled={parts.length >= 50} onClick={() => setParts([...parts, { amount: remainder > 0 ? remainder / 100 : "", category_id: "" }])}>Add part</Button>
+            <Button size="xs" disabled={remainder !== 0 || parts.some((p) => cents(p.amount) === 0)} onClick={saveSplit}>Save split</Button>
+            <Button size="xs" variant="default" onClick={() => setParts(null)}>Cancel</Button>
+          </Group>
+        </>
+      ) : data.children.length ? (
+        <>
+          <Table fz="sm" withRowBorders={false} verticalSpacing={2}>
+            <Table.Tbody>
+              {data.children.map((c) => (
+                <Table.Tr key={c.id}>
+                  <Table.Td>{meta?.categories.find((k) => k.id === c.category_id)?.name ?? "Uncategorized"}</Table.Td>
+                  <Table.Td ta="right">{money2(c.amount)}</Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+          <Group mt="xs">
+            <Button size="xs" variant="default" onClick={startSplit}>Edit split</Button>
+            <Button size="xs" variant="subtle" color="red" onClick={removeSplit}>Remove split</Button>
+          </Group>
+        </>
+      ) : (
+        <Button size="xs" variant="default" onClick={startSplit}>Split this transaction</Button>
+      )}
       <Title order={3} size="h6" mt="xl" mb="xs">History</Title>
       {history.data?.length ? (
         <Table fz="sm" withRowBorders={false} verticalSpacing={2}>

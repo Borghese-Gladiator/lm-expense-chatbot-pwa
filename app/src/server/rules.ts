@@ -21,6 +21,7 @@ export const RuleIn = z.object({
 });
 
 const MATCH = `NOT t.user_edited
+  AND NOT EXISTS (SELECT 1 FROM transactions ch WHERE ch.parent_id = t.id)
   AND (r.text_contains IS NULL OR strpos(
         lower(COALESCE(t.payee_raw, '') || ' ' || COALESCE(t.merchant, '')), lower(r.text_contains)) > 0)
   AND (r.account_id IS NULL OR t.account_id = r.account_id)

@@ -77,6 +77,20 @@ const TxnPatch = z.object({
   clear_category: z.boolean().default(false),
   clear_type: z.boolean().default(false),
 });
+const SplitIn = z.object({
+  parts: z
+    .array(
+      z.object({
+        amount: z.number().refine((n) => n !== 0, "a part cannot be zero"),
+        category_id: z.number().int().nullish(),
+        merchant: z.string().trim().min(1).nullish(),
+        notes: z.string().nullish(),
+        tags: z.array(z.string()).default([]),
+      }),
+    )
+    .min(2)
+    .max(50),
+});
 const BulkPatch = z.object({ ids: z.array(z.number().int()).min(1).max(5000), patch: TxnPatch });
 const SavedQueryIn = z.object({ name: z.string().min(1).max(120), query: AnalyticsQuerySchema });
 const AccountIn = z.object({
@@ -189,7 +203,7 @@ const ROUTES: [string, string, Handler][] = [
       const [categories, accounts, tags, groups, bounds] = await Promise.all([
         db.query("SELECT * FROM categories ORDER BY group_name NULLS LAST, name"),
         db.query(
-          `SELECT a.*, (SELECT COUNT(*) FROM transactions t WHERE t.account_id = a.id) AS txn_count
+          `SELECT a.*, (SELECT COUNT(*) FROM reportable t WHERE t.account_id = a.id) AS txn_count
            FROM accounts a ORDER BY a.name`,
         ),
         db.query<{ t: string }>("SELECT DISTINCT unnest(tags) AS t FROM transactions ORDER BY t"),
@@ -387,8 +401,53 @@ const ROUTES: [string, string, Handler][] = [
       const tid = id(params[0]);
       if ((await scalar(db, "SELECT source FROM transactions WHERE id = ?", [tid])) === "plaid")
         throw new HttpError(409, "bank transactions come back on sync; set type to adjustment instead");
-      await db.query("DELETE FROM transactions WHERE id = ?", [tid]);
+      if ((await scalar(db, "SELECT parent_id FROM transactions WHERE id = ?", [tid])) != null)
+        throw new HttpError(409, "this is one part of a split. Remove the split instead");
+      await db.query("DELETE FROM transactions WHERE id = ? OR parent_id = ?", [tid, tid]);
       return { ok: true };
+    },
+  ],
+  [
+    "PUT",
+    "transactions/:id/split",
+    async ({ db }, { params, body }) => {
+      const tid = id(params[0]);
+      const { parts } = SplitIn.parse(body);
+      return db.tx(async (t) => {
+        const p = await one<Row>(t, "SELECT * FROM transactions WHERE id = ? FOR UPDATE", [tid]);
+        if (!p) throw new HttpError(404, "transaction not found");
+        if (p.parent_id != null) throw new HttpError(409, "this transaction is already one part of a split");
+        if (await one(t, "SELECT 1 FROM trip_transactions WHERE transaction_id = ?", [tid]))
+          throw new HttpError(409, "this transaction is linked to a trip. Remove the link, split it, then link the parts");
+        const cents = (n: number) => Math.round(n * 100);
+        const sum = parts.reduce((s, x) => s + cents(x.amount), 0);
+        if (sum !== cents(Number(p.amount)))
+          throw new HttpError(422, `the parts add up to ${sum / 100}, but the transaction is ${Number(p.amount)}`);
+        await t.query("DELETE FROM transactions WHERE parent_id = ?", [tid]);
+        const ids: number[] = [];
+        for (const x of parts)
+          ids.push(
+            Number(
+              await scalar(
+                t,
+                `INSERT INTO transactions (source, account_id, date, amount, currency, payee_raw, merchant, category_id,
+                   tags, notes, type, is_pending, reviewed, user_edited, parent_id)
+                 VALUES ('split', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE, ?) RETURNING id`,
+                [p.account_id, p.date, x.amount, p.currency, p.payee_raw, x.merchant ?? p.merchant, x.category_id ?? null,
+                  x.tags, x.notes ?? null, p.type, p.is_pending, p.reviewed, tid],
+              ),
+            ),
+          );
+        return { ids };
+      });
+    },
+  ],
+  [
+    "DELETE",
+    "transactions/:id/split",
+    async ({ db }, { params }) => {
+      const rows = await db.query("DELETE FROM transactions WHERE parent_id = ? RETURNING id", [id(params[0])]);
+      return { removed: rows.length };
     },
   ],
   [
@@ -496,7 +555,7 @@ const ROUTES: [string, string, Handler][] = [
       if (!pair || b.keep === b.remove) throw new HttpError(404, "pair not found");
       if (b.not_duplicate)
         await db.query("INSERT INTO not_duplicates (plaid_id, csv_id) VALUES (?, ?) ON CONFLICT DO NOTHING", [pair.plaid, pair.csv]);
-      else await db.query("DELETE FROM transactions WHERE id = ?", [b.remove]);
+      else await db.query("DELETE FROM transactions WHERE id = ? OR parent_id = ?", [b.remove, b.remove]);
       return { ok: true };
     },
   ],
