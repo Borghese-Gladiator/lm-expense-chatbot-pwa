@@ -17,6 +17,7 @@ export const RuleIn = z.object({
   set_merchant: z.string().trim().min(1).nullish(),
   set_tags: z.array(z.string().trim().min(1)).default([]),
   set_reviewed: z.boolean().default(false),
+  set_type: z.enum(["income", "expense", "transfer", "adjustment"]).nullish(),
 });
 
 const MATCH = `NOT t.user_edited
@@ -28,28 +29,40 @@ const MATCH = `NOT t.user_edited
 
 const SET = `category_id = COALESCE(r.set_category_id, t.category_id),
   merchant = COALESCE(r.set_merchant, t.merchant),
+  type = COALESCE(r.set_type, t.type),
   tags = CASE WHEN cardinality(r.set_tags) > 0
          THEN ARRAY(SELECT DISTINCT x FROM unnest(t.tags || r.set_tags) x ORDER BY x) ELSE t.tags END,
   reviewed = t.reviewed OR r.set_reviewed,
   updated_at = now()`;
 
+const ruleParams = (r: z.output<typeof RuleIn>) => [
+  r.text_contains ?? null,
+  r.account_id ?? null,
+  r.amount_min ?? null,
+  r.amount_max ?? null,
+  r.set_category_id ?? null,
+  r.set_merchant ?? null,
+  r.set_tags,
+  r.set_reviewed,
+  r.set_type ?? null,
+];
+
 export async function createRule(db: Db, rule: z.input<typeof RuleIn>): Promise<number> {
-  const r = RuleIn.parse(rule);
   const rows = await db.query<{ id: number }>(
-    `INSERT INTO rules (text_contains, account_id, amount_min, amount_max, set_category_id, set_merchant, set_tags, set_reviewed)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
-    [
-      r.text_contains ?? null,
-      r.account_id ?? null,
-      r.amount_min ?? null,
-      r.amount_max ?? null,
-      r.set_category_id ?? null,
-      r.set_merchant ?? null,
-      r.set_tags,
-      r.set_reviewed,
-    ],
+    `INSERT INTO rules (text_contains, account_id, amount_min, amount_max, set_category_id, set_merchant, set_tags, set_reviewed, set_type)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+    ruleParams(RuleIn.parse(rule)),
   );
   return Number(rows[0].id);
+}
+
+export async function updateRule(db: Db, ruleId: number, rule: z.input<typeof RuleIn>): Promise<boolean> {
+  const rows = await db.query(
+    `UPDATE rules SET text_contains = ?, account_id = ?, amount_min = ?, amount_max = ?, set_category_id = ?,
+       set_merchant = ?, set_tags = ?, set_reviewed = ?, set_type = ? WHERE id = ? RETURNING id`,
+    [...ruleParams(RuleIn.parse(rule)), ruleId],
+  );
+  return rows.length > 0;
 }
 
 export async function applyRules(db: Db, ids: number[]): Promise<void> {
@@ -72,7 +85,7 @@ export const previewRule = (db: Db, ruleId: number): Promise<Row[]> =>
 export const applyRule = (db: Db, ruleId: number) =>
   db.tx(async (t) => {
     const old = await t.query(
-      `SELECT t.id, t.category_id, t.merchant, t.tags, t.reviewed
+      `SELECT t.id, t.category_id, t.merchant, t.tags, t.reviewed, t.type
        FROM transactions t JOIN rules r ON r.id = ? WHERE ${MATCH} ORDER BY t.id FOR UPDATE OF t`,
       [ruleId],
     );
@@ -100,9 +113,9 @@ export const undoExecution = (db: Db, execId: number) =>
     const rows = await tracked(t, ids, "undo", null, () =>
       t.query(
         `UPDATE transactions t SET category_id = o.category_id, merchant = o.merchant, tags = o.tags,
-           reviewed = o.reviewed, updated_at = now()
+           reviewed = o.reviewed, type = o.type, updated_at = now()
          FROM rule_executions e,
-              jsonb_to_recordset(e.old_values) AS o(id BIGINT, category_id BIGINT, merchant TEXT, tags TEXT[], reviewed BOOLEAN)
+              jsonb_to_recordset(e.old_values) AS o(id BIGINT, category_id BIGINT, merchant TEXT, tags TEXT[], reviewed BOOLEAN, type TEXT)
          WHERE e.id = ? AND t.id = o.id RETURNING t.id`,
         [execId],
       ),

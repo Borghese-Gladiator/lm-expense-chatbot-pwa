@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 
 import { importCsv } from "@/server/csv";
 import { categoryIdFor, one } from "@/server/db";
-import { applyRules, createRule } from "@/server/rules";
+import { applyRule, applyRules, createRule, undoExecution, updateRule } from "@/server/rules";
 
 import { addAccount, addTxn, memoryDb } from "./helpers";
 
@@ -38,4 +38,46 @@ it("matches on account and amount range", async () => {
   await applyRules(db, ids);
   const rows = await db.query<{ category_id: number | null }>("SELECT category_id FROM transactions ORDER BY id");
   expect(rows.map((r) => r.category_id)).toEqual([cat, null, null]);
+});
+
+it("a set_type rule marks a card payment as a transfer, and the row leaves spending", async () => {
+  const db = await memoryDb();
+  const acct = await addAccount(db);
+  await createRule(db, { text_contains: "payment thank you", set_type: "transfer" });
+  const pay = await addTxn(db, acct, "2026-10-01", -500, "PAYMENT THANK YOU");
+  const shop = await addTxn(db, acct, "2026-10-01", -30, "Shop");
+  await applyRules(db, [pay, shop]);
+  const rows = await db.query<{ id: number; txn_type: string }>("SELECT id, txn_type FROM reportable ORDER BY id");
+  expect(rows.map((r) => r.txn_type)).toEqual(["transfer", "expense"]);
+});
+
+it("apply and undo restore the type", async () => {
+  const db = await memoryDb();
+  const acct = await addAccount(db);
+  const t = await addTxn(db, acct, "2026-10-01", -500, "PAYMENT THANK YOU");
+  await db.query("UPDATE transactions SET type = 'expense' WHERE id = ?", [t]);
+  const rule = await createRule(db, { text_contains: "payment", set_type: "transfer" });
+  const { execution_id } = await applyRule(db, rule);
+  expect((await one(db, "SELECT type FROM transactions WHERE id = ?", [t]))!.type).toBe("transfer");
+  await undoExecution(db, execution_id);
+  expect((await one(db, "SELECT type FROM transactions WHERE id = ?", [t]))!.type).toBe("expense");
+});
+
+it("edits a rule, and an edit does not change rows that were already changed", async () => {
+  const db = await memoryDb();
+  const acct = await addAccount(db);
+  const coffee = await categoryIdFor(db, "Coffee");
+  const food = await categoryIdFor(db, "Food");
+  const rule = await createRule(db, { text_contains: "starbucks", set_category_id: coffee });
+  const first = await addTxn(db, acct, "2026-10-01", -4, "Starbucks");
+  await applyRules(db, [first]);
+
+  expect(await updateRule(db, rule, { text_contains: "starbucks", set_category_id: food, set_type: "expense" })).toBe(true);
+  expect((await one(db, "SELECT set_category_id, set_type FROM rules WHERE id = ?", [rule]))).toEqual({ set_category_id: food, set_type: "expense" });
+  expect((await one(db, "SELECT category_id FROM transactions WHERE id = ?", [first]))!.category_id).toBe(coffee);
+
+  const second = await addTxn(db, acct, "2026-10-02", -5, "Starbucks");
+  await applyRules(db, [second]);
+  expect((await one(db, "SELECT category_id FROM transactions WHERE id = ?", [second]))!.category_id).toBe(food);
+  expect(await updateRule(db, 9999, { text_contains: "x" })).toBe(false);
 });

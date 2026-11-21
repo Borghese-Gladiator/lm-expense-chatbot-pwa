@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import type { Category } from "../api";
 import { api } from "../api";
+import { money2 } from "../format";
 import { useApp } from "../shared";
 
 const EMPTY: Omit<Category, "id"> = { name: "", group_name: "", kind: "expense", exclude_from_totals: false, archived: false };
@@ -39,14 +40,52 @@ function CategoryRow({ cat, onSaved }: { cat: Category; onSaved: () => void }) {
 interface Rule {
   id: number;
   text_contains: string | null;
+  account_id: number | null;
   account: string | null;
   amount_min: number | null;
   amount_max: number | null;
+  set_category_id: number | null;
   category: string | null;
   set_merchant: string | null;
   set_tags: string[];
   set_reviewed: boolean;
+  set_type: string | null;
 }
+
+interface PreviewRow {
+  id: number;
+  date: string;
+  amount: number;
+  payee: string;
+  category: string | null;
+}
+
+interface RuleForm {
+  text: string;
+  merchant: string;
+  category: string | null;
+  type: string | null;
+  tags: string;
+  reviewed: boolean;
+}
+
+const BLANK: RuleForm = { text: "", merchant: "", category: null, type: null, tags: "", reviewed: false };
+
+const TYPES = [
+  { value: "expense", label: "Expense" },
+  { value: "income", label: "Income" },
+  { value: "transfer", label: "Transfer (not spending)" },
+  { value: "adjustment", label: "Adjustment" },
+];
+
+const toForm = (r: Rule): RuleForm => ({
+  text: r.text_contains ?? "",
+  merchant: r.set_merchant ?? "",
+  category: r.set_category_id == null ? null : String(r.set_category_id),
+  type: r.set_type,
+  tags: r.set_tags.join(", "),
+  reviewed: r.set_reviewed,
+});
 
 function describe(r: Rule): [string, string] {
   const when = [
@@ -58,6 +97,7 @@ function describe(r: Rule): [string, string] {
   const then = [
     r.category && `category ${r.category}`,
     r.set_merchant && `merchant ${r.set_merchant}`,
+    r.set_type && `type ${r.set_type}`,
     r.set_tags.length > 0 && `tags ${r.set_tags.join(", ")}`,
     r.set_reviewed && "reviewed",
   ].filter(Boolean);
@@ -69,19 +109,52 @@ function Rules() {
   const [rules, setRules] = useState<Rule[]>([]);
   const [status, setStatus] = useState<Record<number, string>>({});
   const [execs, setExecs] = useState<Record<number, number>>({});
-  const [text, setText] = useState("");
-  const [category, setCategory] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{ id: number; count: number; items: PreviewRow[] } | null>(null);
+  const [form, setForm] = useState<RuleForm>(BLANK);
+  const [editing, setEditing] = useState<Rule | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const load = () => api<Rule[]>("/rules").then(setRules);
   useEffect(() => {
     load();
   }, []);
 
+  const startEdit = (r: Rule) => {
+    setEditing(r);
+    setForm(toForm(r));
+    setErr(null);
+  };
+  const reset = () => {
+    setEditing(null);
+    setForm(BLANK);
+  };
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErr(null);
+    const body = {
+      ...(editing ? { account_id: editing.account_id, amount_min: editing.amount_min, amount_max: editing.amount_max } : {}),
+      text_contains: form.text || null,
+      set_merchant: form.merchant || null,
+      set_category_id: form.category ? Number(form.category) : null,
+      set_type: form.type,
+      set_tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean),
+      set_reviewed: form.reviewed,
+    };
+    try {
+      if (editing) await api(`/rules/${editing.id}`, body, "PUT");
+      else await api("/rules", body);
+      reset();
+      load();
+    } catch (ex) {
+      setErr((ex as Error).message);
+    }
+  };
+
   return (
     <Card withBorder component="section" padding="md">
       <Title order={2} size="h4" mb="xs">Rules</Title>
       <Text c="dimmed" size="sm" mb="sm">
-        Rules run on new rows from CSV import and bank sync. A rule never changes a row that you edited.
+        Rules run on new rows from CSV import and bank sync, in the order shown. A later rule wins over an earlier one.
+        A rule never changes a row that you edited. Editing a rule does not change rows that it already changed.
       </Text>
       <Table fz="sm" aria-label="Rules list">
         <Table.Thead>
@@ -97,9 +170,11 @@ function Rules() {
                 <Table.Td>
                   <Group gap="xs" wrap="wrap">
                     <Button size="xs" variant="default" onClick={async () => {
-                      const p = await api<{ count: number }>(`/rules/${r.id}/preview`, {});
+                      const p = await api<{ count: number; items: PreviewRow[] }>(`/rules/${r.id}/preview`, {});
+                      setPreview({ id: r.id, ...p });
                       setStatus((s) => ({ ...s, [r.id]: `${p.count} matching ${p.count === 1 ? "row" : "rows"}` }));
                     }}>Preview</Button>
+                    <Button size="xs" variant="default" onClick={() => startEdit(r)}>Edit</Button>
                     <Button size="xs" onClick={async () => {
                       const a = await api<{ execution_id: number; changed: number }>(`/rules/${r.id}/apply`, {});
                       setExecs((e) => ({ ...e, [r.id]: a.execution_id }));
@@ -116,6 +191,8 @@ function Rules() {
                     )}
                     <Button size="xs" variant="default" onClick={async () => {
                       await api(`/rules/${r.id}`, undefined, "DELETE");
+                      if (editing?.id === r.id) reset();
+                      if (preview?.id === r.id) setPreview(null);
                       load();
                     }}>Delete</Button>
                     {status[r.id] && <Text size="sm" role="status">{status[r.id]}</Text>}
@@ -126,24 +203,43 @@ function Rules() {
           })}
         </Table.Tbody>
       </Table>
-      <form onSubmit={async (e) => {
-        e.preventDefault();
-        setErr(null);
-        try {
-          await api("/rules", { text_contains: text, set_category_id: category ? Number(category) : null });
-          setText("");
-          setCategory(null);
-          load();
-        } catch (ex) {
-          setErr((ex as Error).message);
-        }
-      }}>
-        <Group gap="sm" mt="md" wrap="wrap">
-          <TextInput required label="Text contains" placeholder="STARBUCKS" value={text} onChange={(e) => setText(e.currentTarget.value)} w={200} />
-          <Select required label="Set category" searchable data={meta?.categories.map((c) => ({ value: String(c.id), label: c.name })) ?? []} value={category} onChange={setCategory} w={200} />
-          <Button type="submit" style={{ alignSelf: "flex-end" }}>Add rule</Button>
-          {err && <Text c="red" size="sm">{err}</Text>}
+
+      {preview && (
+        <Stack gap={4} mt="md" aria-label="Rule preview">
+          <Group justify="space-between">
+            <Text size="sm" fw={600}>Rule {preview.id} matches {preview.count} {preview.count === 1 ? "row" : "rows"}{preview.count > 20 ? " (first 20 shown)" : ""}</Text>
+            <Button size="xs" variant="subtle" onClick={() => setPreview(null)}>Close preview</Button>
+          </Group>
+          {preview.items.length > 0 && (
+            <Table fz="xs" withRowBorders={false} verticalSpacing={2}>
+              <Table.Tbody>
+                {preview.items.slice(0, 20).map((p) => (
+                  <Table.Tr key={p.id}>
+                    <Table.Td>{p.date}</Table.Td>
+                    <Table.Td>{p.payee}</Table.Td>
+                    <Table.Td c="dimmed">{p.category ?? "Uncategorized"}</Table.Td>
+                    <Table.Td ta="right">{money2(p.amount)}</Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          )}
+        </Stack>
+      )}
+
+      <form onSubmit={submit}>
+        <Text fw={600} size="sm" mt="md">{editing ? `Edit rule ${editing.id}` : "Add a rule"}</Text>
+        <Group gap="sm" mt="xs" wrap="wrap" align="flex-end">
+          <TextInput label="Text contains" placeholder="STARBUCKS" value={form.text} onChange={(e) => setForm({ ...form, text: e.currentTarget.value })} w={180} />
+          <TextInput label="Set merchant" placeholder="Starbucks" value={form.merchant} onChange={(e) => setForm({ ...form, merchant: e.currentTarget.value })} w={160} />
+          <Select label="Set category" searchable clearable data={meta?.categories.map((c) => ({ value: String(c.id), label: c.name })) ?? []} value={form.category} onChange={(v) => setForm({ ...form, category: v })} w={180} />
+          <Select label="Set type" clearable data={TYPES} value={form.type} onChange={(v) => setForm({ ...form, type: v })} w={190} />
+          <TextInput label="Add tags (comma separated)" value={form.tags} onChange={(e) => setForm({ ...form, tags: e.currentTarget.value })} w={190} />
+          <Checkbox label="Mark reviewed" checked={form.reviewed} onChange={(e) => setForm({ ...form, reviewed: e.currentTarget.checked })} />
+          <Button type="submit" disabled={!form.text && !editing}>{editing ? "Save rule" : "Add rule"}</Button>
+          {editing && <Button variant="default" onClick={reset}>Cancel</Button>}
         </Group>
+        {err && <Text c="red" size="sm" mt="xs">{err}</Text>}
       </form>
     </Card>
   );

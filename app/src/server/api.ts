@@ -17,7 +17,7 @@ import { one, openDb, scalar, type Db, type Row } from "./db";
 import { tracked } from "./history";
 import * as plaid from "./plaid";
 import { suggestForTrip } from "./suggest";
-import { applyRule, createRule, previewRule, RuleIn, undoExecution } from "./rules";
+import { applyRule, createRule, previewRule, RuleIn, undoExecution, updateRule } from "./rules";
 
 export interface Ctx {
   db: Db;
@@ -604,6 +604,14 @@ const ROUTES: [string, string, Handler][] = [
       ),
   ],
   ["POST", "rules", async ({ db }, { body }) => ({ id: await createRule(db, RuleIn.parse(body)) })],
+  [
+    "PUT",
+    "rules/:id",
+    async ({ db }, { params, body }) => {
+      if (!(await updateRule(db, id(params[0]), RuleIn.parse(body)))) throw new HttpError(404, "rule not found");
+      return { ok: true };
+    },
+  ],
   ["POST", "rules/:id/preview", async ({ db }, { params }) => {
     const rows = await previewRule(db, id(params[0]));
     return { count: rows.length, items: rows };
