@@ -46,6 +46,10 @@ The app must work fully after the user disconnects or cancels Lunch Money.
 - Bill payment or money transfers
 - Investment trading
 - Financial planning advice
+- Net worth, assets, stocks, real estate, and crypto
+- Recurring item detection. The card statement already lists each charge.
+- Automatic transfer matching. A rule marks a transfer.
+- Multi-currency. All amounts are USD.
 
 ## 3. Status key
 
