@@ -94,6 +94,12 @@ streamlit run src/app.py
 This POC proved the concept and tool definitions that were later implemented in the JavaScript MVP.
 
 ---
+### 📊 [`poc_v0.0.1/`](./poc_v0.0.1) - Report generator (Python), v0.0.1
+**Status:** Archived (imported from the standalone `expense-tracker` repo with full git history)
+
+The earliest attempt, from May to Nov 2024. It generated monthly and year-to-date spending reports from Lunch Money using a Dash/Streamlit client and a small `expense_tracker` Python package. It also included Docker and Kubernetes configs and one-off PDF/CSV transaction extraction scripts. See [poc_v0.0.1/ARCHIVE.md](./poc_v0.0.1/ARCHIVE.md).
+
+---
 
 ## Quick Start
 

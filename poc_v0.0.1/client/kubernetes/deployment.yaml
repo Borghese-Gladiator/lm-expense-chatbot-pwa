@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dash-expense-tracker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: dash-expense-tracker
+  template:
+    metadata:
+      labels:
+        app: dash-expense-tracker
+    spec:
+      containers:
+        - name: dash-expense-tracker
+          image: timshee/dash-expense-tracker:0.1.0
+          ports:
+            - containerPort: 8080
+          # kubectl set env deployment/dash-expense-tracker LUNCH_MONEY_API_KEY="your_new_api_key"
+          # kubectl describe deployment dash-expense-tracker
+          # kubectl rollout status deployment/dash-expense-tracker
+          ## env:
+          ## - name: LUNCH_MONEY_API_KEY
+          ##   value: ""

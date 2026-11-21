@@ -1,0 +1,1 @@
+RENT_REQUIRED = -1500  # expenses are negative 

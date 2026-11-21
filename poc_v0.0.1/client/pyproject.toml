@@ -1,0 +1,24 @@
+[tool.poetry]
+name = "client"
+version = "0.1.0"
+description = ""
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "<3.13,>=3.10"
+streamlit = "^1.36.0"
+matplotlib = "^3.9.0"
+expense-tracker = {git = "https://github.com/Borghese-Gladiator/expense-tracker.git"}
+plotly = "^5.22.0"
+python-dotenv = "^1.0.1"
+dash = "^2.17.1"
+dash-bootstrap-components = "^1.6.0"
+
+
+[tool.poetry.group.dev.dependencies]
+pipdeptree = "^2.23.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
