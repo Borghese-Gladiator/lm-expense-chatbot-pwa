@@ -1,9 +1,9 @@
-import { Alert, Button, Card, FileInput, Group, Menu, Modal, Select, Stack, Table, Text, TextInput, Title } from "@mantine/core";
+import { Alert, Anchor, Badge, Button, Card, FileInput, Group, Menu, Modal, Select, Stack, Table, Text, TextInput, Title } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useState } from "react";
 
 import { api, type Account } from "../api";
-import { money2 } from "../format";
+import { ago, money2 } from "../format";
 import { LoadState, useApp, useAsync } from "../shared";
 
 interface PlaidItem {
@@ -13,6 +13,11 @@ interface PlaidItem {
   error: string | null;
   last_synced_at: string | null;
 }
+const TYPE_COLOR: Record<string, string> = {
+  checking: "blue", savings: "teal", "money market": "teal", cd: "teal",
+  credit: "orange", "credit card": "orange", cash: "gray", investment: "grape",
+};
+
 interface SyncRun {
   id: number;
   source: string;
@@ -66,7 +71,7 @@ export function Accounts() {
   }
   const groups: { key: string; title: string; item: PlaidItem | null; accounts: Account[] }[] = [
     ...(items.data ?? []).map((i) => ({ key: `i${i.id}`, title: i.institution ?? "Bank", item: i, accounts: byItem.get(i.id) ?? [] })),
-    ...(loose.length ? [{ key: "loose", title: "Manual and CSV accounts", item: null, accounts: loose }] : []),
+    ...(loose.length ? [{ key: "loose", title: "Accounts with no bank link", item: null, accounts: loose }] : []),
   ];
 
   const refresh = async () => {
@@ -127,13 +132,25 @@ export function Accounts() {
       return "Reconnected.";
     });
 
-  const removeItem = (it: PlaidItem) => {
-    if (!confirm(`Remove ${it.institution ?? "this bank"}? Its accounts and all their transactions are deleted. You cannot undo this.`)) return;
-    run("Removing", async () => {
-      await api(`/plaid/items/${it.id}`, undefined, "DELETE");
-      return `Removed ${it.institution ?? "the bank"}.`;
+  const disconnect = (it: PlaidItem, deleteData: boolean) => {
+    const name = it.institution ?? "this bank";
+    const warning = deleteData
+      ? `Disconnect ${name} and delete its accounts and all their transactions? You cannot undo this.`
+      : `Disconnect ${name}? Its accounts and transactions stay. New transactions stop syncing.`;
+    if (!confirm(warning)) return;
+    run("Disconnecting", async () => {
+      await api(`/plaid/items/${it.id}${deleteData ? "?data=delete" : ""}`, undefined, "DELETE");
+      return deleteData ? `Disconnected ${name} and deleted its data.` : `Disconnected ${name}. Its transactions stay.`;
     });
   };
+
+  const syncAll = () =>
+    run("Syncing all", async () => {
+      const r = await api<{ items: { added?: number; error?: string }[] }>("/plaid/sync-all", {});
+      const failed = r.items.filter((i) => i.error).length;
+      const added = r.items.reduce((n, i) => n + (i.added ?? 0), 0);
+      return `Synced ${r.items.length - failed} of ${r.items.length} connections. ${added} new transactions.${failed ? ` ${failed} failed.` : ""}`;
+    });
 
   const syncItem = (id: number) =>
     run("Syncing", async () => {
@@ -151,6 +168,7 @@ export function Accounts() {
           ) : (
             <Text c="dimmed" size="sm">Set PLAID_CLIENT_ID and PLAID_SECRET to connect real banks.</Text>
           )}
+          {(items.data?.length ?? 0) > 0 && <Button variant="default" onClick={syncAll} disabled={busy}>Sync all</Button>}
           <Button variant={meta?.plaid_live ? "default" : "filled"} onClick={connectMock} disabled={busy}>Add mock bank</Button>
         </Group>
       </Group>
@@ -158,7 +176,7 @@ export function Accounts() {
 
       {broken.length > 0 && (
         <Alert color="red" role="alert" title="A bank connection needs attention">
-          {broken.map((i) => i.institution ?? "Bank").join(", ")}: use Reconnect, or Remove and connect again.
+          {broken.map((i) => i.institution ?? "Bank").join(", ")}: use Reconnect, or Disconnect and connect again.
         </Alert>
       )}
 
@@ -172,17 +190,25 @@ export function Accounts() {
                 {g.item ? (
                   <Text size="xs" c={g.item.status === "ok" ? "dimmed" : "red"}>
                     {g.item.status === "ok" ? "Connected" : g.item.status === "reconnect" ? "Sign-in needed" : g.item.error}
-                    {" · "}Last sync: {g.item.last_synced_at ? new Date(g.item.last_synced_at).toLocaleString() : "Never"}
+                    {" · "}Last sync: <span title={g.item.last_synced_at ? new Date(g.item.last_synced_at).toLocaleString() : undefined}>{ago(g.item.last_synced_at)}</span>
                   </Text>
                 ) : (
-                  <Text size="xs" c="dimmed">No bank link. Add rows by hand or by CSV.</Text>
+                  <Text size="xs" c="dimmed">Manual, CSV, and disconnected accounts.</Text>
                 )}
               </div>
               {g.item && (
                 <Group gap="xs" wrap="nowrap">
                   {g.item.status === "reconnect" && <Button size="xs" disabled={busy} onClick={() => reconnect(g.item!.id)}>Reconnect</Button>}
                   <Button size="xs" variant="default" disabled={busy} onClick={() => syncItem(g.item!.id)}>Sync now</Button>
-                  <Button size="xs" variant="subtle" color="red" disabled={busy} onClick={() => removeItem(g.item!)}>Remove</Button>
+                  <Menu position="bottom-end">
+                    <Menu.Target>
+                      <Button size="xs" variant="subtle" color="red" disabled={busy}>Disconnect</Button>
+                    </Menu.Target>
+                    <Menu.Dropdown>
+                      <Menu.Item onClick={() => disconnect(g.item!, false)}>Disconnect, keep transactions</Menu.Item>
+                      <Menu.Item color="red" onClick={() => disconnect(g.item!, true)}>Disconnect and delete transactions</Menu.Item>
+                    </Menu.Dropdown>
+                  </Menu>
                 </Group>
               )}
             </Group>
@@ -192,8 +218,10 @@ export function Accounts() {
                   <Table.Tbody>
                     {g.accounts.map((a) => (
                       <Table.Tr key={a.id}>
-                        <Table.Td>{a.name}</Table.Td>
-                        <Table.Td c="dimmed">{a.type}</Table.Td>
+                        <Table.Td>
+                          <Anchor href={`#transactions?account=${a.id}`} aria-label={`View transactions for ${a.name}`}>{a.name}</Anchor>
+                        </Table.Td>
+                        <Table.Td><Badge variant="light" color={TYPE_COLOR[a.type] ?? "gray"}>{a.type}</Badge></Table.Td>
                         <Table.Td ta="right" style={NUM}>{a.txn_count} txns</Table.Td>
                         <Table.Td ta="right" style={NUM}>{a.balance == null ? "—" : money2(a.balance)}</Table.Td>
                         <Table.Td ta="right">

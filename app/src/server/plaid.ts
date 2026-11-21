@@ -133,7 +133,12 @@ export async function createUpdateLinkToken(db: Db, client: PlaidClient, itemPk:
   return createLinkToken(client, readToken(enc, client));
 }
 
-export async function removeItem(db: Db, client: PlaidClient, itemPk: number): Promise<{ plaid_removed: boolean } | null> {
+export async function disconnectItem(
+  db: Db,
+  client: PlaidClient,
+  itemPk: number,
+  deleteData: boolean,
+): Promise<{ plaid_removed: boolean } | null> {
   const enc = await scalar<string | undefined>(db, "SELECT access_token_enc FROM plaid_items WHERE id = ?", [itemPk]);
   if (enc === undefined) return null;
   let plaid_removed = false;
@@ -142,7 +147,8 @@ export async function removeItem(db: Db, client: PlaidClient, itemPk: number): P
     plaid_removed = true;
   } catch {}
   await db.tx(async (t) => {
-    await t.query("DELETE FROM accounts WHERE plaid_item_id = ?", [itemPk]);
+    if (deleteData) await t.query("DELETE FROM accounts WHERE plaid_item_id = ?", [itemPk]);
+    else await t.query("UPDATE accounts SET plaid_item_id = NULL WHERE plaid_item_id = ?", [itemPk]);
     await t.query("DELETE FROM plaid_items WHERE id = ?", [itemPk]);
   });
   return { plaid_removed };

@@ -702,12 +702,14 @@ const ROUTES: [string, string, Handler][] = [
   [
     "DELETE",
     "plaid/items/:id",
-    async (ctx, { params }) => {
-      const out = await plaid.removeItem(ctx.db, ctx.plaid, id(params[0]));
+    async (ctx, { params, req }) => {
+      const deleteData = new URL(req.url).searchParams.get("data") === "delete";
+      const out = await plaid.disconnectItem(ctx.db, ctx.plaid, id(params[0]), deleteData);
       if (!out) throw new HttpError(404, "connection not found");
       return out;
     },
   ],
+  ["POST", "plaid/sync-all", async (ctx) => syncAll(ctx)],
   ["GET", "cron/sync", async (ctx) => syncAll(ctx)],
 ];
 

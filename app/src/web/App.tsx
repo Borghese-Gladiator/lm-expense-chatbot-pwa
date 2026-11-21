@@ -1,8 +1,8 @@
-import { AppShell, Badge, Burger, Button, Container, Group, NavLink, Paper, Text, Title } from "@mantine/core";
+import { Alert, AppShell, Badge, Burger, Button, Container, Group, NavLink, Paper, Text, Title } from "@mantine/core";
 import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import { useCallback, useEffect, useState } from "react";
 
-import type { Drill } from "./api";
+import { api, type Drill } from "./api";
 import { setCurrency } from "./format";
 import { Accounts } from "./pages/Accounts";
 import { Explore } from "./pages/Explore";
@@ -43,6 +43,7 @@ export default function App() {
   const mobile = useMediaQuery("(max-width: 47.99em)");
   const bump = useCallback(() => setVersion((v) => v + 1), []);
   const closeDrill = useCallback(() => setDrill(null), []);
+  const [broken, setBroken] = useState<string[]>([]);
 
   useEffect(() => {
     const on = () => {
@@ -61,6 +62,11 @@ export default function App() {
   useEffect(() => {
     if (meta) setCurrency(meta.currency);
   }, [meta]);
+  useEffect(() => {
+    api<{ institution: string | null; status: string }[]>("/plaid/items")
+      .then((rows) => setBroken(rows.filter((r) => r.status !== "ok").map((r) => r.institution ?? "Bank")))
+      .catch(() => setBroken([]));
+  }, [version, page]);
 
   const Page = PAGES[page].el;
   const empty = meta && meta.accounts.length === 0 && page !== "accounts" && page !== "settings" && page !== "trips";
@@ -91,6 +97,14 @@ export default function App() {
           ))}
         </AppShell.Navbar>
         <AppShell.Main>
+          {broken.length > 0 && page !== "accounts" && (
+            <Alert color="red" role="alert" radius={0} title="A bank connection needs attention">
+              <Group gap="sm" wrap="wrap">
+                <Text size="sm">{broken.join(", ")} needs a new sign-in. New transactions are not syncing.</Text>
+                <Button component="a" href="#accounts" size="xs" color="red">Open Accounts</Button>
+              </Group>
+            </Alert>
+          )}
           {empty ? (
             <Container size="xl" py="lg">
               <Paper withBorder p="xl" ta="center">

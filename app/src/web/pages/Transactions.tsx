@@ -11,7 +11,10 @@ const PAGE = 100;
 
 export function Transactions() {
   const { meta, openTxn, version, bump } = useApp();
-  const [filters, setFilters] = useState<Filters>({ include_pending: true, include_excluded_categories: true });
+  const [filters, setFilters] = useState<Filters>(() => {
+    const account = /[?&]account=(\d+)/.exec(location.hash)?.[1];
+    return { include_pending: true, include_excluded_categories: true, ...(account ? { account_ids: [Number(account)] } : {}) };
+  });
   const [flags, setFlags] = useState({ uncategorized: false, unreviewed: false });
   const [sort, setSort] = useState<{ sort: string; desc: boolean }>({ sort: "date", desc: true });
   const [cursors, setCursors] = useState<string[]>([]);

@@ -28,7 +28,7 @@ async function api(method: string, path: string, body?: unknown) {
   const res = await handle(
     ctx,
     new Request(`http://test/api/${path}`, { method, body: body === undefined ? undefined : JSON.stringify(body) }),
-    path.split("/"),
+    path.split("?")[0].split("/"),
   );
   return { status: res.status, data: await res.json() };
 }
@@ -36,33 +36,63 @@ async function api(method: string, path: string, body?: unknown) {
 const count = async (table: string) => Number((await ctx.db.query<{ n: string }>(`SELECT COUNT(*) AS n FROM ${table}`))[0].n);
 
 describe("bank connections", () => {
-  it("remove deletes the connection, its accounts, and its rows, and keeps other accounts", async () => {
+  const connect = async () =>
+    (await api("POST", "plaid/exchange", { public_token: "pub", institution: "Bank" })).data.item as number;
+  const names = async () => (await ctx.db.query<{ name: string }>("SELECT name FROM accounts ORDER BY name")).map((r) => r.name);
+
+  it("disconnect keeps accounts and rows and unlinks the accounts", async () => {
     bank.add("a", 1, "A");
-    const { item } = (await api("POST", "plaid/exchange", { public_token: "pub", institution: "Bank" })).data;
-    await api("POST", "accounts", { name: "Cash", type: "cash" });
+    const item = await connect();
+    const before = await count("accounts");
 
     const out = await api("DELETE", `plaid/items/${item}`);
     expect(out).toMatchObject({ status: 200, data: { plaid_removed: true } });
     expect(await count("plaid_items")).toBe(0);
-    expect(await count("transactions")).toBe(0);
-    expect((await ctx.db.query<{ name: string }>("SELECT name FROM accounts")).map((r) => r.name)).toEqual(["Cash"]);
+    expect(await count("accounts")).toBe(before);
+    expect(await count("transactions")).toBe(1);
+    expect(Number((await ctx.db.query<{ n: string }>("SELECT COUNT(*) AS n FROM accounts WHERE plaid_item_id IS NOT NULL"))[0].n)).toBe(0);
   });
 
-  it("remove still deletes locally when Plaid fails", async () => {
+  it("disconnect with data=delete removes the accounts and rows and keeps other accounts", async () => {
     bank.add("a", 1, "A");
-    const { item } = (await api("POST", "plaid/exchange", { public_token: "pub", institution: "Bank" })).data;
+    const item = await connect();
+    await api("POST", "accounts", { name: "Cash", type: "cash" });
+
+    expect((await api("DELETE", `plaid/items/${item}?data=delete`)).status).toBe(200);
+    expect(await count("transactions")).toBe(0);
+    expect(await names()).toEqual(["Cash"]);
+  });
+
+  it("disconnect still works locally when Plaid fails", async () => {
+    bank.add("a", 1, "A");
+    const item = await connect();
     bank.fail("/item/remove", 500, "INTERNAL_SERVER_ERROR", 99);
     expect((await api("DELETE", `plaid/items/${item}`)).data).toEqual({ plaid_removed: false });
     expect(await count("plaid_items")).toBe(0);
   });
 
-  it("remove returns 404 for an unknown connection", async () => {
+  it("disconnect returns 404 for an unknown connection", async () => {
     expect((await api("DELETE", "plaid/items/999")).status).toBe(404);
+  });
+
+  it("sync-all syncs each healthy connection and skips a broken one", async () => {
+    bank.add("a", 1, "A");
+    const healthy = await connect();
+    await ctx.db.query(
+      "INSERT INTO plaid_items (item_id, institution, access_token_enc, status) SELECT 'broken', 'Broken', access_token_enc, 'reconnect' FROM plaid_items WHERE id = ?",
+      [healthy],
+    );
+    bank.add("b", 2, "B");
+
+    const out = await api("POST", "plaid/sync-all");
+    expect(out.status).toBe(200);
+    expect(out.data.items).toHaveLength(1);
+    expect(out.data.items[0]).toMatchObject({ item: healthy, added: 1 });
   });
 
   it("sync with an unreadable token gives a clear message and does not crash", async () => {
     bank.add("a", 1, "A");
-    const { item } = (await api("POST", "plaid/exchange", { public_token: "pub", institution: "Bank" })).data;
+    const item = await connect();
     ctx.settings.appSecretKey = "z".repeat(32);
     const out = await api("POST", `plaid/items/${item}/sync`);
     expect(out.status).toBe(502);

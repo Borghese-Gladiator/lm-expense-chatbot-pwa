@@ -55,6 +55,23 @@ export const dimValue = (dim: Dimension | undefined, v: string | undefined) => {
   }
 };
 
+const AGO_UNITS: [number, string][] = [
+  [365 * 86_400, "year"],
+  [30 * 86_400, "month"],
+  [86_400, "day"],
+  [3_600, "hour"],
+  [60, "minute"],
+];
+
+export function ago(when: string | null | undefined, now = Date.now()): string {
+  if (!when) return "never";
+  const seconds = Math.max(0, Math.round((now - new Date(when).getTime()) / 1000));
+  const unit = AGO_UNITS.find(([size]) => seconds >= size);
+  if (!unit) return "just now";
+  const n = Math.floor(seconds / unit[0]);
+  return `${n} ${unit[1]}${n > 1 ? "s" : ""} ago`;
+}
+
 export const iso = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
