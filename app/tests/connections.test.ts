@@ -121,3 +121,20 @@ describe("bank connections", () => {
     expect(out.data.detail).toContain("connect the bank again");
   });
 });
+
+describe("reconnect after a disconnect that kept the data", () => {
+  it("the new connection takes the old accounts back and adds no copies", async () => {
+    bank.add("a", 1, "A");
+    const first = (await api("POST", "plaid/exchange", { public_token: "pub", institution: "Bank" })).data.item as number;
+    const accountsBefore = await ctx.db.query<{ id: number }>("SELECT id FROM accounts ORDER BY id");
+    await api("DELETE", `plaid/items/${first}`);
+    expect(Number((await ctx.db.query<{ n: string }>("SELECT COUNT(*) AS n FROM accounts WHERE plaid_item_id IS NOT NULL"))[0].n)).toBe(0);
+
+    bank.add("b", 2, "B");
+    const second = (await api("POST", "plaid/exchange", { public_token: "pub", institution: "Bank" })).data.item as number;
+
+    const accountsAfter = await ctx.db.query<{ id: number; plaid_item_id: number }>("SELECT id, plaid_item_id FROM accounts ORDER BY id");
+    expect(accountsAfter.map((a) => a.id)).toEqual(accountsBefore.map((a) => a.id));
+    expect(accountsAfter.every((a) => Number(a.plaid_item_id) === second)).toBe(true);
+  });
+});

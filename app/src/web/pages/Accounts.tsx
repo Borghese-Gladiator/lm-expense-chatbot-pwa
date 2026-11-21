@@ -193,7 +193,7 @@ export function Accounts() {
       <Section title="Accounts">
         <LoadState empty={meta?.accounts.length === 0 && (items.data?.length ?? 0) === 0} emptyText="No accounts yet. Connect a bank, add a mock bank, or add a manual account." />
         {groups.map((g) => (
-          <Stack key={g.key} gap={0} mb="md">
+          <Stack key={g.key} gap={0} mb="md" component="section" aria-label={g.title}>
             <Group justify="space-between" wrap="nowrap" py="xs" style={{ borderBottom: "1px solid var(--mantine-color-default-border)" }}>
               <div>
                 <Text fw={600}>{g.title} <Text span c="dimmed" inherit>({g.accounts.length})</Text></Text>

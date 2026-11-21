@@ -185,7 +185,8 @@ async function upsertAccounts(db: Db, itemPk: number, institution: string | null
       `INSERT INTO accounts (name, type, institution, source, source_id, plaid_item_id, currency, balance, balance_at)
        VALUES (?, ?, ?, 'plaid', ?, ?, ?, ?, now())
        ON CONFLICT (source, source_id) DO UPDATE SET
-         balance = excluded.balance, balance_at = excluded.balance_at, type = excluded.type`,
+         balance = excluded.balance, balance_at = excluded.balance_at, type = excluded.type,
+         plaid_item_id = excluded.plaid_item_id, institution = excluded.institution`,
       [
         a.official_name || a.name || "Account",
         a.subtype || a.type || "other",
