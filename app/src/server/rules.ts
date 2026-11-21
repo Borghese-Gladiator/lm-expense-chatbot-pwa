@@ -18,12 +18,17 @@ export const RuleIn = z.object({
   set_tags: z.array(z.string().trim().min(1)).default([]),
   set_reviewed: z.boolean().default(false),
   set_type: z.enum(["income", "expense", "transfer", "adjustment"]).nullish(),
+  text_match: z.enum(["contains", "equals"]).default("contains"),
 });
 
 const MATCH = `NOT t.user_edited
   AND NOT EXISTS (SELECT 1 FROM transactions ch WHERE ch.parent_id = t.id)
-  AND (r.text_contains IS NULL OR strpos(
-        lower(COALESCE(t.payee_raw, '') || ' ' || COALESCE(t.merchant, '')), lower(r.text_contains)) > 0)
+  AND (r.text_contains IS NULL OR
+        CASE WHEN r.text_match = 'equals'
+          THEN lower(COALESCE(t.merchant, t.payee_raw, '')) = lower(r.text_contains)
+            OR lower(COALESCE(t.payee_raw, '')) = lower(r.text_contains)
+          ELSE strpos(lower(COALESCE(t.payee_raw, '') || ' ' || COALESCE(t.merchant, '')), lower(r.text_contains)) > 0
+        END)
   AND (r.account_id IS NULL OR t.account_id = r.account_id)
   AND (r.amount_min IS NULL OR abs(t.amount) >= r.amount_min)
   AND (r.amount_max IS NULL OR abs(t.amount) <= r.amount_max)`;
@@ -46,12 +51,13 @@ const ruleParams = (r: z.output<typeof RuleIn>) => [
   r.set_tags,
   r.set_reviewed,
   r.set_type ?? null,
+  r.text_match,
 ];
 
 export async function createRule(db: Db, rule: z.input<typeof RuleIn>): Promise<number> {
   const rows = await db.query<{ id: number }>(
-    `INSERT INTO rules (text_contains, account_id, amount_min, amount_max, set_category_id, set_merchant, set_tags, set_reviewed, set_type)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+    `INSERT INTO rules (text_contains, account_id, amount_min, amount_max, set_category_id, set_merchant, set_tags, set_reviewed, set_type, text_match)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
     ruleParams(RuleIn.parse(rule)),
   );
   return Number(rows[0].id);
@@ -60,7 +66,7 @@ export async function createRule(db: Db, rule: z.input<typeof RuleIn>): Promise<
 export async function updateRule(db: Db, ruleId: number, rule: z.input<typeof RuleIn>): Promise<boolean> {
   const rows = await db.query(
     `UPDATE rules SET text_contains = ?, account_id = ?, amount_min = ?, amount_max = ?, set_category_id = ?,
-       set_merchant = ?, set_tags = ?, set_reviewed = ?, set_type = ? WHERE id = ? RETURNING id`,
+       set_merchant = ?, set_tags = ?, set_reviewed = ?, set_type = ?, text_match = ? WHERE id = ? RETURNING id`,
     [...ruleParams(RuleIn.parse(rule)), ruleId],
   );
   return rows.length > 0;
@@ -124,3 +130,28 @@ export const undoExecution = (db: Db, execId: number) =>
     await t.query("UPDATE rule_executions SET undone_at = now() WHERE id = ?", [execId]);
     return { restored: rows.length };
   });
+
+export async function listMerchants(db: Db): Promise<{ merchant: string; count: number }[]> {
+  const rows = await db.query<{ merchant: string; n: string }>(
+    "SELECT merchant, COUNT(*) AS n FROM reportable GROUP BY merchant ORDER BY n DESC, merchant",
+  );
+  return rows.map((r) => ({ merchant: r.merchant, count: Number(r.n) }));
+}
+
+export const MerchantRenameIn = z.object({
+  from: z.array(z.string().trim().min(1)).min(1).max(200),
+  to: z.string().trim().min(1).max(200),
+});
+
+export async function renameMerchants(db: Db, from: string[], to: string) {
+  const names = [...new Set(from)].filter((n) => n !== to);
+  const executions: number[] = [];
+  let changed = 0;
+  for (const name of names) {
+    const ruleId = await createRule(db, { text_contains: name, text_match: "equals", set_merchant: to });
+    const out = await applyRule(db, ruleId);
+    executions.push(out.execution_id);
+    changed += out.changed;
+  }
+  return { rules: names.length, changed, execution_ids: executions };
+}

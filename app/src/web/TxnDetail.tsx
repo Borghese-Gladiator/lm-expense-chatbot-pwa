@@ -160,6 +160,20 @@ export function TxnDetail({ id, onClose }: { id: number; onClose: () => void }) 
         <Button onClick={save} disabled={Object.keys(draft).length === 0} loading={saving}>Save</Button>
         {saveError && <Text c="red" size="sm">{saveError}</Text>}
       </Group>
+      <Button
+        mt="sm"
+        size="xs"
+        variant="default"
+        component="a"
+        href={`#settings?rule=${encodeURIComponent(JSON.stringify({
+          text: data.merchant ?? data.payee_raw ?? "",
+          category: data.category_id == null ? null : String(data.category_id),
+          type: data.type,
+        }))}`}
+        onClick={onClose}
+      >
+        Make a rule from this transaction
+      </Button>
       <Title order={3} size="h6" mt="xl" mb="xs">Split</Title>
       {data.parent_id != null ? (
         <Text size="sm" c="dimmed">This is one part of a split. Open the original transaction to change the split.</Text>

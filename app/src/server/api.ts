@@ -18,7 +18,7 @@ import { one, openDb, scalar, type Db, type Row } from "./db";
 import { tracked } from "./history";
 import * as plaid from "./plaid";
 import { suggestForTrip } from "./suggest";
-import { applyRule, createRule, previewRule, RuleIn, undoExecution, updateRule } from "./rules";
+import { applyRule, createRule, listMerchants, MerchantRenameIn, previewRule, renameMerchants, RuleIn, undoExecution, updateRule } from "./rules";
 
 export interface Ctx {
   db: Db;
@@ -664,6 +664,15 @@ const ROUTES: [string, string, Handler][] = [
          LEFT JOIN accounts a ON a.id = r.account_id LEFT JOIN categories c ON c.id = r.set_category_id
          ORDER BY r.id`,
       ),
+  ],
+  ["GET", "merchants", async ({ db }) => listMerchants(db)],
+  [
+    "POST",
+    "merchants/rename",
+    async ({ db }, { body }) => {
+      const b = MerchantRenameIn.parse(body);
+      return renameMerchants(db, b.from, b.to);
+    },
   ],
   ["POST", "rules", async ({ db }, { body }) => ({ id: await createRule(db, RuleIn.parse(body)) })],
   [

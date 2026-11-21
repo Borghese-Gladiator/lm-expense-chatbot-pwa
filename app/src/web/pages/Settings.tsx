@@ -1,4 +1,4 @@
-import { Anchor, Button, Card, Checkbox, Group, Select, Stack, Table, Text, TextInput, Title } from "@mantine/core";
+import { Anchor, Button, Card, Checkbox, Group, Modal, Select, Stack, Table, Text, TextInput, Title } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useEffect, useState } from "react";
 
@@ -71,6 +71,16 @@ interface RuleForm {
 
 const BLANK: RuleForm = { text: "", merchant: "", category: null, type: null, tags: "", reviewed: false };
 
+function formFromHash(): RuleForm | null {
+  const m = /[?&]rule=([^&]+)/.exec(location.hash);
+  if (!m) return null;
+  try {
+    return { ...BLANK, ...JSON.parse(decodeURIComponent(m[1])) };
+  } catch {
+    return null;
+  }
+}
+
 const TYPES = [
   { value: "expense", label: "Expense" },
   { value: "income", label: "Income" },
@@ -110,7 +120,7 @@ function Rules() {
   const [status, setStatus] = useState<Record<number, string>>({});
   const [execs, setExecs] = useState<Record<number, number>>({});
   const [preview, setPreview] = useState<{ id: number; count: number; items: PreviewRow[] } | null>(null);
-  const [form, setForm] = useState<RuleForm>(BLANK);
+  const [form, setForm] = useState<RuleForm>(() => formFromHash() ?? BLANK);
   const [editing, setEditing] = useState<Rule | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const load = () => api<Rule[]>("/rules").then(setRules);
@@ -245,6 +255,109 @@ function Rules() {
   );
 }
 
+interface MerchantRow {
+  merchant: string;
+  count: number;
+}
+
+function Merchants() {
+  const { bump, version } = useApp();
+  const [rows, setRows] = useState<MerchantRow[]>([]);
+  const [search, setSearch] = useState("");
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [dialog, setDialog] = useState<{ from: string[]; to: string } | null>(null);
+  const [msg, setMsg] = useState<{ text: string; ids: number[] } | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const load = () => api<MerchantRow[]>("/merchants").then(setRows);
+  useEffect(() => {
+    load();
+  }, [version]);
+
+  const shown = rows.filter((r) => r.merchant.toLowerCase().includes(search.trim().toLowerCase()));
+  const toggle = (name: string) =>
+    setPicked((p) => {
+      const next = new Set(p);
+      next.has(name) ? next.delete(name) : next.add(name);
+      return next;
+    });
+  const open = (from: string[]) => {
+    setErr(null);
+    setDialog({ from, to: from.length === 1 ? from[0] : (rows.find((r) => from.includes(r.merchant))?.merchant ?? from[0]) });
+  };
+  const save = async () => {
+    const d = dialog!;
+    setErr(null);
+    try {
+      const r = await api<{ rules: number; changed: number; execution_ids: number[] }>("/merchants/rename", { from: d.from, to: d.to });
+      setDialog(null);
+      setPicked(new Set());
+      setMsg({ text: `Renamed to ${d.to}. ${r.changed} ${r.changed === 1 ? "row" : "rows"} changed.`, ids: r.execution_ids });
+      bump();
+      load();
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  };
+
+  return (
+    <Card withBorder component="section" padding="md">
+      <Title order={2} size="h4" mb="xs">Merchants</Title>
+      <Text c="dimmed" size="sm" mb="sm">
+        Rename a merchant, or select several names and merge them into one. This makes a rule for each name, so new rows
+        get the clean name too. The bank description is not changed.
+      </Text>
+      <Group gap="sm" mb="sm" wrap="wrap">
+        <TextInput placeholder="Search merchants" aria-label="Search merchants" value={search} onChange={(e) => setSearch(e.currentTarget.value)} w={220} />
+        <Button disabled={picked.size < 2} onClick={() => open([...picked])}>Merge {picked.size > 1 ? `${picked.size} selected` : "selected"}</Button>
+        {msg && (
+          <Group gap="xs" role="status">
+            <Text size="sm">{msg.text}</Text>
+            <Button size="xs" variant="default" onClick={async () => {
+              for (const id of msg.ids) await api(`/rule-executions/${id}/undo`, {});
+              setMsg(null);
+              bump();
+              load();
+            }}>Undo</Button>
+          </Group>
+        )}
+      </Group>
+      {rows.length === 0 ? (
+        <Text c="dimmed" size="sm">No transactions yet.</Text>
+      ) : (
+        <Table.ScrollContainer minWidth={420} mah={360} type="native">
+          <Table fz="sm" aria-label="Merchants list">
+            <Table.Tbody>
+              {shown.slice(0, 200).map((r) => (
+                <Table.Tr key={r.merchant}>
+                  <Table.Td w={36}><Checkbox aria-label={`Select ${r.merchant}`} checked={picked.has(r.merchant)} onChange={() => toggle(r.merchant)} /></Table.Td>
+                  <Table.Td>{r.merchant}</Table.Td>
+                  <Table.Td ta="right" c="dimmed">{r.count}</Table.Td>
+                  <Table.Td ta="right"><Button size="xs" variant="default" onClick={() => open([r.merchant])}>Rename</Button></Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+          {shown.length > 200 && <Text size="xs" c="dimmed" mt="xs">Showing 200 of {shown.length}. Use the search box to narrow the list.</Text>}
+        </Table.ScrollContainer>
+      )}
+
+      <Modal opened={dialog !== null} onClose={() => setDialog(null)} title={dialog && dialog.from.length > 1 ? `Merge ${dialog.from.length} merchants` : "Rename merchant"}>
+        <form onSubmit={(e) => { e.preventDefault(); if (dialog?.to.trim()) save(); }}>
+          <Stack gap="sm">
+            {dialog && dialog.from.length > 1 && <Text size="sm">{dialog.from.join(", ")}</Text>}
+            <TextInput data-autofocus label="New name" maxLength={200} value={dialog?.to ?? ""} onChange={(e) => dialog && setDialog({ ...dialog, to: e.currentTarget.value })} />
+            {err && <Text c="red" size="sm" role="alert">{err}</Text>}
+            <Group justify="flex-end">
+              <Button variant="default" onClick={() => setDialog(null)}>Cancel</Button>
+              <Button type="submit" disabled={!dialog?.to.trim()}>Save</Button>
+            </Group>
+          </Stack>
+        </form>
+      </Modal>
+    </Card>
+  );
+}
+
 export function Settings() {
   const { meta, reloadMeta, bump } = useApp();
   const [draft, setDraft] = useState(EMPTY);
@@ -298,6 +411,7 @@ export function Settings() {
         </form>
       </Card>
 
+      <Merchants />
       <Rules />
 
       <Card withBorder component="section" padding="md">

@@ -46,3 +46,29 @@ Make the Accounts page easier to use. Warn about a broken bank on every page. Le
 
 - Unit test for each step, in the existing test style.
 - Manual: open each page in the browser after step 5.
+
+# Plan 3: Merchants and rules from a row
+
+## Changes
+
+1. `GET /api/merchants`: each merchant with its row count, from `reportable`, most rows first.
+2. `POST /api/merchants/rename`: body `{ from: [names], to: name }`. It writes one rule for each name in `from` (text equals the name), sets the merchant to `to`, and applies it to past rows. It returns the execution ids, so the page can undo.
+3. A rule matches on the text of the payee and the merchant. A rule for "Amazon" would also match "Amazon Prime". A new match mode `equals` makes a merchant rule exact. Add the column `text_match` ('contains' or 'equals') to `rules`.
+4. Settings: a Merchants section with a search box, row counts, a Rename button, and a Merge action for selected names.
+5. Row detail: a "Make a rule from this row" button. It opens the Rules form with the text set to the merchant, the category set to the row category, and the type set to the row type.
+
+## Tests
+
+### Unit
+
+- Merchant list counts rows and leaves out the parts of a split parent.
+- Rename writes a rule, changes past rows, skips edited rows, and can be undone.
+- Merge maps three names to one name.
+- An `equals` rule does not match a longer name.
+- Renaming to an existing name merges the rows.
+
+### Manual (browser)
+
+1. Open Settings. Merchants lists names with counts.
+2. Select two names, and merge them. Both show as one name.
+3. Open a row. Press "Make a rule from this row". The rule form shows the row values.
