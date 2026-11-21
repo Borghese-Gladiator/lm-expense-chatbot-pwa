@@ -106,6 +106,7 @@ export interface Account {
 export interface Meta {
   currency: string;
   plaid_configured: boolean;
+  plaid_live: boolean;
   plaid_env: string;
   ask_configured: boolean;
   categories: Category[];

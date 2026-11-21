@@ -5,11 +5,16 @@ import { loadSettings, type Settings } from "./config";
 import { encrypt } from "./crypto";
 import { categoryIdFor, scalar, type Db } from "./db";
 
+export const MOCK_PUBLIC_TOKEN = "mock-public-token";
+export const MOCK_ACCESS_TOKEN = "mock-access-token";
+
+export const hasLivePlaid = (s: Settings) => Boolean(s.plaidClientId && s.plaidSecret);
+
 export const mockSettings = (s: Settings): Settings => ({
   ...s,
-  plaidClientId: "mock",
-  plaidSecret: "mock",
-  appSecretKey: s.appSecretKey || "mock-secret-key-for-demo-only",
+  plaidClientId: s.plaidClientId || "mock",
+  plaidSecret: s.plaidSecret || "mock",
+  appSecretKey: s.appSecretKey || (hasLivePlaid(s) ? "" : "mock-secret-key-for-demo-only"),
   anthropicApiKey: "mock",
 });
 
@@ -44,7 +49,7 @@ export const mockFetch: typeof fetch = async (input, init) => {
   const body = JSON.parse(String(init?.body ?? "{}"));
   const reply = ({
     "/link/token/create": { link_token: "mock-link-token" },
-    "/item/public_token/exchange": { access_token: "mock-access-token", item_id: "mock-item" },
+    "/item/public_token/exchange": { access_token: MOCK_ACCESS_TOKEN, item_id: "mock-item" },
     "/accounts/get": { accounts: PLAID_ACCOUNTS },
     "/transactions/sync": body.cursor
       ? { added: [], modified: [], removed: [], accounts: PLAID_ACCOUNTS, next_cursor: body.cursor, has_more: false }
@@ -54,6 +59,15 @@ export const mockFetch: typeof fetch = async (input, init) => {
     ? Response.json(reply)
     : Response.json({ error_code: "MOCK_NOT_FOUND", error_message: path }, { status: 400 });
 };
+
+/** Sends a call to the mock only when it carries a mock token. Every other call goes to Plaid. */
+export const routedFetch =
+  (real: typeof fetch = fetch): typeof fetch =>
+  async (input, init) => {
+    const body = JSON.parse(String(init?.body ?? "{}"));
+    const mock = body.public_token === MOCK_PUBLIC_TOKEN || body.access_token === MOCK_ACCESS_TOKEN;
+    return (mock ? mockFetch : real)(input, init);
+  };
 
 /** Keyword rules in place of the model. */
 export async function mockAsk(db: Db, question: string): Promise<AskResult> {
@@ -146,7 +160,7 @@ export async function seedDemo(db: Db): Promise<number> {
         "Top merchants", JSON.stringify({ measure: "spending", metric: "total", dimensions: ["merchant"], filters: {}, compare: "none", limit: 15 }),
       ],
     );
-    const token = encrypt("mock-access-token", mockSettings(loadSettings()).appSecretKey);
+    const token = encrypt(MOCK_ACCESS_TOKEN, mockSettings(loadSettings()).appSecretKey || "mock-secret-key-for-demo-only");
     await tx.query(
       `INSERT INTO plaid_items (item_id, institution, access_token_enc, status, error)
        VALUES ('mock-item', 'Mock Bank', ?, 'ok', NULL), ('mock-item-2', 'Mock Credit Union', ?, 'reconnect', 'ITEM_LOGIN_REQUIRED: x')`,

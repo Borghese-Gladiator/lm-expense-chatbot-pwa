@@ -10,7 +10,7 @@ import {
   runQuery,
   whereClause,
 } from "./analytics";
-import { mockAsk, mockFetch, mockSettings, seedIfEmpty } from "./mock";
+import { hasLivePlaid, mockAsk, mockFetch, mockSettings, routedFetch, seedIfEmpty } from "./mock";
 import { loadSettings, type Settings } from "./config";
 import { CsvImportSchema, importCsv } from "./csv";
 import { one, openDb, scalar, type Db, type Row } from "./db";
@@ -199,6 +199,7 @@ const ROUTES: [string, string, Handler][] = [
       return {
         currency: settings.currency,
         plaid_configured: Boolean(settings.plaidClientId),
+        plaid_live: settings.plaidClientId !== "mock",
         plaid_env: settings.plaidEnv,
         ask_configured: Boolean(settings.anthropicApiKey),
         categories,
@@ -769,10 +770,11 @@ let shared: Promise<Ctx> | undefined;
 
 export function sharedCtx(): Promise<Ctx> {
   shared ??= (async () => {
-    const settings = mockSettings(loadSettings());
+    const real = loadSettings();
+    const settings = mockSettings(real);
     const db = await openDb(settings);
     await seedIfEmpty(db);
-    return { settings, db, plaid: new plaid.PlaidClient(settings, mockFetch) };
+    return { settings, db, plaid: new plaid.PlaidClient(settings, hasLivePlaid(real) ? routedFetch() : mockFetch) };
   })().catch((e) => {
     shared = undefined;
     throw e;

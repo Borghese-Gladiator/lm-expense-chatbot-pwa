@@ -74,13 +74,15 @@ export function Accounts() {
     }
   };
 
+  const connectMock = () =>
+    run("Connecting mock bank", async () => {
+      const r = await api<{ added: number }>("/plaid/exchange", { public_token: "mock-public-token", institution: "Mock Bank" });
+      return `Connected (mock). Imported ${r.added} transactions.`;
+    });
+
   const connect = () =>
     run("Opening Plaid", async () => {
       const { link_token } = await api<{ link_token: string }>("/plaid/link-token", {});
-      if (link_token === "mock-link-token") {
-        const r = await api<{ added: number }>("/plaid/exchange", { public_token: "mock-public-token", institution: "Mock Bank" });
-        return `Connected (mock). Imported ${r.added} transactions.`;
-      }
       await loadPlaid();
       return new Promise<string>((resolve, reject) => {
         window.Plaid!.create({
@@ -122,11 +124,14 @@ export function Accounts() {
     <Stack p="md" gap="md">
       <Group justify="space-between" wrap="wrap">
         <Title order={1} size="h2">Accounts</Title>
-        {meta?.plaid_configured ? (
-          <Button onClick={connect} disabled={busy}>Connect a bank ({meta.plaid_env})</Button>
-        ) : (
-          <Text c="dimmed" size="sm">Set PLAID_CLIENT_ID and PLAID_SECRET to connect banks.</Text>
-        )}
+        <Group gap="xs">
+          {meta?.plaid_live ? (
+            <Button onClick={connect} disabled={busy}>Connect a bank ({meta.plaid_env})</Button>
+          ) : (
+            <Text c="dimmed" size="sm">Set PLAID_CLIENT_ID and PLAID_SECRET to connect real banks.</Text>
+          )}
+          <Button variant={meta?.plaid_live ? "default" : "filled"} onClick={connectMock} disabled={busy}>Add mock bank</Button>
+        </Group>
       </Group>
       {msg && <Alert color={msg.error ? "red" : "blue"} role="status">{msg.text}</Alert>}
 
