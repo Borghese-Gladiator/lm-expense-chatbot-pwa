@@ -91,6 +91,7 @@ const AccountPatch = z.object({
   archived: z.boolean().nullish(),
   history_cutover: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
 });
+const ItemPatch = z.object({ institution: z.string().trim().min(1).max(120) });
 const MergeIn = z.object({ into_id: z.number().int() });
 const ResolveIn = z.object({ keep: z.number().int(), remove: z.number().int(), not_duplicate: z.boolean().default(false) });
 const DUPLICATES = `
@@ -706,6 +707,16 @@ const ROUTES: [string, string, Handler][] = [
       const out = await plaid.removeItem(ctx.db, ctx.plaid, id(params[0]));
       if (!out) throw new HttpError(404, "connection not found");
       return out;
+    },
+  ],
+  [
+    "PATCH",
+    "plaid/items/:id",
+    async ({ db }, { params, body }) => {
+      const b = ItemPatch.parse(body);
+      const rows = await db.query("UPDATE plaid_items SET institution = ? WHERE id = ? RETURNING id", [b.institution, id(params[0])]);
+      if (rows.length === 0) throw new HttpError(404, "connection not found");
+      return { ok: true };
     },
   ],
   ["GET", "cron/sync", async (ctx) => syncAll(ctx)],

@@ -56,6 +56,7 @@ export function Accounts() {
   const [merge, setMerge] = useState<{ id: number; name: string } | null>(null);
   const [mergeInto, setMergeInto] = useState<string | null>(null);
   const [cutover, setCutover] = useState<{ id: number; name: string; value: string } | null>(null);
+  const [rename, setRename] = useState<{ id: number; value: string } | null>(null);
 
   const broken = (items.data ?? []).filter((i) => i.status !== "ok");
   const byItem = new Map<number, Account[]>();
@@ -135,6 +136,15 @@ export function Accounts() {
     });
   };
 
+  const saveName = () => {
+    const r = rename!;
+    setRename(null);
+    run("Renaming", async () => {
+      await api(`/plaid/items/${r.id}`, { institution: r.value.trim() }, "PATCH");
+      return `Renamed to ${r.value.trim()}.`;
+    });
+  };
+
   const syncItem = (id: number) =>
     run("Syncing", async () => {
       const r = await api<{ added: number; modified: number; removed: number }>(`/plaid/items/${id}/sync`, {});
@@ -181,6 +191,7 @@ export function Accounts() {
               {g.item && (
                 <Group gap="xs" wrap="nowrap">
                   {g.item.status === "reconnect" && <Button size="xs" disabled={busy} onClick={() => reconnect(g.item!.id)}>Reconnect</Button>}
+                  <Button size="xs" variant="default" disabled={busy} onClick={() => setRename({ id: g.item!.id, value: g.title })}>Rename</Button>
                   <Button size="xs" variant="default" disabled={busy} onClick={() => syncItem(g.item!.id)}>Sync now</Button>
                   <Button size="xs" variant="subtle" color="red" disabled={busy} onClick={() => removeItem(g.item!)}>Remove</Button>
                 </Group>
@@ -224,6 +235,18 @@ export function Accounts() {
         ))}
         <AddAccount onDone={refresh} />
       </Section>
+
+      <Modal opened={rename !== null} onClose={() => setRename(null)} title="Rename connection">
+        <form onSubmit={(e) => { e.preventDefault(); if (rename?.value.trim()) saveName(); }}>
+          <Stack gap="sm">
+            <TextInput data-autofocus label="Name" maxLength={120} value={rename?.value ?? ""} onChange={(e) => rename && setRename({ ...rename, value: e.currentTarget.value })} />
+            <Group justify="flex-end">
+              <Button variant="default" onClick={() => setRename(null)}>Cancel</Button>
+              <Button type="submit" disabled={!rename?.value.trim()}>Save</Button>
+            </Group>
+          </Stack>
+        </form>
+      </Modal>
 
       <Modal opened={cutover !== null} onClose={() => setCutover(null)} title={`History cutover for ${cutover?.name ?? ""}`}>
         <Stack gap="sm">

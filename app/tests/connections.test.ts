@@ -60,6 +60,22 @@ describe("bank connections", () => {
     expect((await api("DELETE", "plaid/items/999")).status).toBe(404);
   });
 
+  it("rename saves the name and a later sync keeps it", async () => {
+    bank.add("a", 1, "A");
+    const { item } = (await api("POST", "plaid/exchange", { public_token: "pub", institution: "Bank" })).data;
+    expect((await api("PATCH", `plaid/items/${item}`, { institution: "  Everyday Bank " })).status).toBe(200);
+    await api("POST", `plaid/items/${item}/sync`);
+    const rows = await ctx.db.query<{ institution: string }>("SELECT institution FROM plaid_items");
+    expect(rows.map((r) => r.institution)).toEqual(["Everyday Bank"]);
+  });
+
+  it.each([
+    [999, { institution: "X" }, 404],
+    [1, { institution: "   " }, 422],
+  ])("rename of item %s with %j returns %s", async (item, body, status) => {
+    expect((await api("PATCH", `plaid/items/${item}`, body)).status).toBe(status);
+  });
+
   it("sync with an unreadable token gives a clear message and does not crash", async () => {
     bank.add("a", 1, "A");
     const { item } = (await api("POST", "plaid/exchange", { public_token: "pub", institution: "Bank" })).data;
