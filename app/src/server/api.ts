@@ -710,6 +710,20 @@ const ROUTES: [string, string, Handler][] = [
     },
   ],
   ["POST", "plaid/sync-all", async (ctx) => syncAll(ctx)],
+  [
+    "PATCH",
+    "plaid/items/:id",
+    async ({ db }, { params, body }) => {
+      const { name } = z.object({ name: z.string().trim().min(1).max(100) }).parse(body);
+      const itemId = id(params[0]);
+      await db.tx(async (t) => {
+        const rows = await t.query("UPDATE plaid_items SET institution = ? WHERE id = ? RETURNING id", [name, itemId]);
+        if (!rows.length) throw new HttpError(404, "connection not found");
+        await t.query("UPDATE accounts SET institution = ? WHERE plaid_item_id = ?", [name, itemId]);
+      });
+      return { ok: true };
+    },
+  ],
   ["GET", "cron/sync", async (ctx) => syncAll(ctx)],
 ];
 

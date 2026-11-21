@@ -90,6 +90,28 @@ describe("bank connections", () => {
     expect(out.data.items[0]).toMatchObject({ item: healthy, added: 1 });
   });
 
+  it("rename changes the connection and its accounts, and survives a sync and a reconnect", async () => {
+    bank.add("a", 1, "A");
+    const item = await connect();
+    expect((await api("PATCH", `plaid/items/${item}`, { name: "  My Chase  " })).status).toBe(200);
+    bank.add("b", 2, "B");
+    await api("POST", `plaid/items/${item}/sync`);
+    await api("POST", `plaid/items/${item}/reconnected`);
+
+    const items = (await api("GET", "plaid/items")).data;
+    expect(items[0].institution).toBe("My Chase");
+    expect((await ctx.db.query<{ institution: string }>("SELECT DISTINCT institution FROM accounts")).map((r) => r.institution)).toEqual(["My Chase"]);
+  });
+
+  it.each([[{ name: "" }], [{ name: "   " }], [{}]])("rename rejects %j", async (body) => {
+    const item = await connect();
+    expect((await api("PATCH", `plaid/items/${item}`, body)).status).toBe(422);
+  });
+
+  it("rename returns 404 for an unknown connection", async () => {
+    expect((await api("PATCH", "plaid/items/999", { name: "X" })).status).toBe(404);
+  });
+
   it("sync with an unreadable token gives a clear message and does not crash", async () => {
     bank.add("a", 1, "A");
     const item = await connect();
