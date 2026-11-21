@@ -31,3 +31,18 @@ Make the Accounts page easier to use. Warn about a broken bank on every page. Le
 5. Click **Open Accounts** in the banner. Accounts opens.
 6. Open the **Disconnect** menu on a connection. Choose "keep transactions". The bank leaves the list. Its accounts stay under "Accounts with no bank link".
 7. Disconnect another bank with "delete transactions". Its accounts leave the list.
+
+# Plan 2: Next features
+
+## Order
+
+1. Keep trip links when a pending row posts (TRIP-08). Test modified and removed rows too.
+2. Rename a bank connection. A new column `display_name` keeps the name through sync and Reconnect.
+3. Rules: edit a rule, a "set type" action, a "set notes" action, matching rows in the preview, and a record of rule runs on sync.
+4. Split transactions: API with a server check of the sum, and an editor in the row detail.
+5. Explore: a trip filter and a trip dimension.
+
+## Tests
+
+- Unit test for each step, in the existing test style.
+- Manual: open each page in the browser after step 5.

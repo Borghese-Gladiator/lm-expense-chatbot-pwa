@@ -286,6 +286,14 @@ async function apply(db: Db, data: Awaited<ReturnType<typeof fetchAll>>): Promis
       ],
     );
     newIds.push(...ins.map((r) => Number(r.id)));
+    if (ins.length && t.pending_transaction_id)
+      await db.query(
+        `INSERT INTO trip_transactions (trip_id, transaction_id, amount)
+         SELECT l.trip_id, ?, l.amount FROM trip_transactions l
+         JOIN transactions p ON p.id = l.transaction_id AND p.source = 'plaid' AND p.source_id = ?
+         ON CONFLICT DO NOTHING`,
+        [ins[0].id, t.pending_transaction_id],
+      );
     added++;
   }
   await applyRules(db, newIds);
