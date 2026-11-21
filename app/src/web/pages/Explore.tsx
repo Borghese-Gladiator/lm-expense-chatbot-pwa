@@ -79,6 +79,8 @@ export function Explore() {
     [version],
   );
 
+  const trips = useAsync(() => api<{ id: number; name: string }[]>("/trips"), [version]);
+
   const loadSaved = () => api<Saved[]>("/saved-queries").then(setSaved);
   useEffect(() => {
     loadSaved();
@@ -327,6 +329,15 @@ export function Explore() {
             <Multi label="Categories" options={catOptions} value={q.filters.category_ids ?? []} onChange={(v) => setF({ category_ids: v })} />
             <Multi label="Groups" options={(meta?.groups ?? []).map((g) => ({ value: g, label: g }))} value={q.filters.category_groups ?? []} onChange={(v) => setF({ category_groups: v })} />
             <Multi label="Merchants" options={(merchants.data ?? []).map((m) => ({ value: m, label: m }))} value={q.filters.merchants ?? []} onChange={(v) => setF({ merchants: v })} />
+            <Select
+              aria-label="Trip"
+              placeholder="Any trip"
+              clearable
+              data={(trips.data ?? []).map((t) => ({ value: String(t.id), label: t.name }))}
+              value={q.filters.trip_id == null ? null : String(q.filters.trip_id)}
+              onChange={(v) => setF({ trip_id: v ? Number(v) : null })}
+              w={160}
+            />
             <Multi label="Tags" options={(meta?.tags ?? []).map((t) => ({ value: t, label: t }))} value={q.filters.tags ?? []} onChange={(v) => setF({ tags: v })} />
             <NumberInput min={0} placeholder="Min $" aria-label="Minimum amount" value={q.filters.amount_min ?? ""} onChange={(v) => setF({ amount_min: v === "" ? null : Number(v) })} w={100} />
             <NumberInput min={0} placeholder="Max $" aria-label="Maximum amount" value={q.filters.amount_max ?? ""} onChange={(v) => setF({ amount_max: v === "" ? null : Number(v) })} w={100} />

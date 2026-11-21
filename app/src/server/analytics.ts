@@ -19,6 +19,7 @@ const DIMENSIONS = [
   "merchant",
   "account",
   "tag",
+  "trip",
   "type",
   "day_of_week",
   "month_of_year",
@@ -39,6 +40,7 @@ export const DIM_SQL: Record<Dimension, string> = {
   merchant: "merchant",
   account: "account",
   tag: "tag",
+  trip: "trip",
   type: "txn_type",
   day_of_week: "to_char(date, 'ID Dy')",
   month_of_year: "CAST(extract(month FROM date) AS INT)",
@@ -157,12 +159,14 @@ export function whereClause(f: Filters, measure: Measure | null): [string, unkno
   return [clauses.join(" AND ") || "TRUE", params];
 }
 
+const usesTrips = (dimensions: Dimension[], f: Filters) => f.trip_id != null || dimensions.includes("trip");
+
 function source(dimensions: Dimension[], f: Filters): string {
-  const base =
-    f.trip_id == null
-      ? "reportable"
-      : `(SELECT r.*, COALESCE(SIGN(r.amount) * l.amount, r.amount) AS eff_amount FROM reportable r` +
-        ` JOIN trip_transactions l ON l.transaction_id = r.id AND l.trip_id = ${f.trip_id}) trip_rows`;
+  const base = !usesTrips(dimensions, f)
+    ? "reportable"
+    : `(SELECT r.*, COALESCE(tr.name, '(no trip)') AS trip, COALESCE(SIGN(r.amount) * l.amount, r.amount) AS eff_amount` +
+      ` FROM reportable r ${f.trip_id == null ? "LEFT JOIN" : "JOIN"} trip_transactions l ON l.transaction_id = r.id` +
+      `${f.trip_id == null ? "" : ` AND l.trip_id = ${f.trip_id}`} LEFT JOIN trips tr ON tr.id = l.trip_id) trip_rows`;
   if (dimensions.includes("tag"))
     return (
       "(SELECT *, unnest(CASE WHEN cardinality(tags) = 0 THEN ARRAY['(untagged)'] ELSE tags END)" +
@@ -171,12 +175,12 @@ function source(dimensions: Dimension[], f: Filters): string {
   return base;
 }
 
-const valueSql = (measure: Measure, f: Filters) =>
-  f.trip_id == null ? MEASURES[measure][1] : MEASURES[measure][1].replace("amount", "eff_amount");
+const valueSql = (measure: Measure, dimensions: Dimension[], f: Filters) =>
+  usesTrips(dimensions, f) ? MEASURES[measure][1].replace("amount", "eff_amount") : MEASURES[measure][1];
 
 function aggregateSql(q: AnalyticsQuery, f: Filters): [string, unknown[]] {
   const [where, params] = whereClause(f, q.measure);
-  const value = valueSql(q.measure, f);
+  const value = valueSql(q.measure, q.dimensions, f);
   const dims = q.dimensions.map((d) => DIM_SQL[d]);
   const names = dims.map((_, i) => `d${i}`);
   const selectDims = dims.map((expr, i) => `${expr} AS d${i}`);
@@ -336,8 +340,9 @@ export async function drilldown(db: Db, req: Drilldown) {
       params = [...params, val];
     }
   }
-  const value = valueSql(q.measure, f);
-  const from = source([], f);
+  const tripDims: Dimension[] = "trip" in req.values ? ["trip"] : [];
+  const value = valueSql(q.measure, tripDims, f);
+  const from = source(tripDims, f);
   const [txns, totals] = await Promise.all([
     db.query(
       `SELECT *, ${value} AS value FROM ${from} WHERE ${where} ORDER BY abs(amount) DESC LIMIT ${req.limit}`,
