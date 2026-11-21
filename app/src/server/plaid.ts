@@ -119,10 +119,33 @@ export async function createLinkToken(client: PlaidClient, accessToken?: string)
   return String(data.link_token);
 }
 
+function readToken(enc: string, client: PlaidClient): string {
+  try {
+    return decrypt(enc, client.settings.appSecretKey);
+  } catch {
+    throw new PlaidError("TOKEN_UNREADABLE", "the saved bank token cannot be read. Remove this connection and connect the bank again");
+  }
+}
+
 export async function createUpdateLinkToken(db: Db, client: PlaidClient, itemPk: number): Promise<string | null> {
   const enc = await scalar<string | undefined>(db, "SELECT access_token_enc FROM plaid_items WHERE id = ?", [itemPk]);
   if (enc === undefined) return null;
-  return createLinkToken(client, decrypt(enc, client.settings.appSecretKey));
+  return createLinkToken(client, readToken(enc, client));
+}
+
+export async function removeItem(db: Db, client: PlaidClient, itemPk: number): Promise<{ plaid_removed: boolean } | null> {
+  const enc = await scalar<string | undefined>(db, "SELECT access_token_enc FROM plaid_items WHERE id = ?", [itemPk]);
+  if (enc === undefined) return null;
+  let plaid_removed = false;
+  try {
+    await client.post("/item/remove", { access_token: readToken(enc, client) });
+    plaid_removed = true;
+  } catch {}
+  await db.tx(async (t) => {
+    await t.query("DELETE FROM accounts WHERE plaid_item_id = ?", [itemPk]);
+    await t.query("DELETE FROM plaid_items WHERE id = ?", [itemPk]);
+  });
+  return { plaid_removed };
 }
 
 export async function markReconnected(db: Db, itemPk: number): Promise<boolean> {
@@ -318,7 +341,7 @@ async function runSync(
   ]);
   let counts: [number, number, number];
   try {
-    const token = decrypt(item.access_token_enc, client.settings.appSecretKey);
+    const token = readToken(item.access_token_enc, client);
     const accounts = (await client.post("/accounts/get", { access_token: token })).accounts ?? [];
     const data = await fetchAll(client, token, item.cursor);
     counts = await db.tx(async (t) => {

@@ -75,6 +75,7 @@ export class FakeBank {
       const n = ++this.exchanges;
       return Response.json({ access_token: `access-${n}`, item_id: `item-${n}` });
     }
+    if (path === "/item/remove") return Response.json({ request_id: "r" });
     if (path === "/accounts/get") return Response.json({ accounts: this.accounts });
     if (path === "/transactions/sync") {
       const start = body.cursor ? Number(String(body.cursor).slice(1)) : 0;

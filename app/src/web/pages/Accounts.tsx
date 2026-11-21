@@ -1,8 +1,8 @@
-import { Alert, Button, Card, FileInput, Group, Modal, Select, Stack, Table, Text, TextInput, Title } from "@mantine/core";
+import { Alert, Button, Card, FileInput, Group, Menu, Modal, Select, Stack, Table, Text, TextInput, Title } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useState } from "react";
 
-import { api } from "../api";
+import { api, type Account } from "../api";
 import { money2 } from "../format";
 import { LoadState, useApp, useAsync } from "../shared";
 
@@ -55,6 +55,19 @@ export function Accounts() {
   const [busy, setBusy] = useState(false);
   const [merge, setMerge] = useState<{ id: number; name: string } | null>(null);
   const [mergeInto, setMergeInto] = useState<string | null>(null);
+  const [cutover, setCutover] = useState<{ id: number; name: string; value: string } | null>(null);
+
+  const broken = (items.data ?? []).filter((i) => i.status !== "ok");
+  const byItem = new Map<number, Account[]>();
+  const loose: Account[] = [];
+  for (const a of meta?.accounts ?? []) {
+    if (a.plaid_item_id == null || !(items.data ?? []).some((i) => i.id === a.plaid_item_id)) loose.push(a);
+    else byItem.set(a.plaid_item_id, [...(byItem.get(a.plaid_item_id) ?? []), a]);
+  }
+  const groups: { key: string; title: string; item: PlaidItem | null; accounts: Account[] }[] = [
+    ...(items.data ?? []).map((i) => ({ key: `i${i.id}`, title: i.institution ?? "Bank", item: i, accounts: byItem.get(i.id) ?? [] })),
+    ...(loose.length ? [{ key: "loose", title: "Manual and CSV accounts", item: null, accounts: loose }] : []),
+  ];
 
   const refresh = async () => {
     await reloadMeta();
@@ -114,6 +127,14 @@ export function Accounts() {
       return "Reconnected.";
     });
 
+  const removeItem = (it: PlaidItem) => {
+    if (!confirm(`Remove ${it.institution ?? "this bank"}? Its accounts and all their transactions are deleted. You cannot undo this.`)) return;
+    run("Removing", async () => {
+      await api(`/plaid/items/${it.id}`, undefined, "DELETE");
+      return `Removed ${it.institution ?? "the bank"}.`;
+    });
+  };
+
   const syncItem = (id: number) =>
     run("Syncing", async () => {
       const r = await api<{ added: number; modified: number; removed: number }>(`/plaid/items/${id}/sync`, {});
@@ -135,85 +156,90 @@ export function Accounts() {
       </Group>
       {msg && <Alert color={msg.error ? "red" : "blue"} role="status">{msg.text}</Alert>}
 
-      {(items.data?.length ?? 0) > 0 && (
-        <Section title="Bank connections">
-          <Table fz="sm">
-            <Table.Tbody>
-              {items.data!.map((it) => (
-                <Table.Tr key={it.id}>
-                  <Table.Td>{it.institution ?? "Bank"}</Table.Td>
-                  <Table.Td c={it.status === "ok" ? "dimmed" : "red"}>
-                    {it.status === "ok" ? "Connected" : it.status === "reconnect" ? "Sign-in needed: connect again" : it.error}
-                  </Table.Td>
-                  <Table.Td c="dimmed" style={NUM}>
-                    Last sync: {it.last_synced_at ? new Date(it.last_synced_at).toLocaleString() : "Never"}
-                  </Table.Td>
-                  <Table.Td ta="right">
-                    <Group gap="xs" justify="flex-end" wrap="nowrap">
-                      {it.status === "reconnect" && (
-                        <Button size="xs" disabled={busy} onClick={() => reconnect(it.id)}>Reconnect</Button>
-                      )}
-                      <Button size="xs" variant="default" disabled={busy} onClick={() => syncItem(it.id)}>Sync now</Button>
-                    </Group>
-                  </Table.Td>
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        </Section>
+      {broken.length > 0 && (
+        <Alert color="red" role="alert" title="A bank connection needs attention">
+          {broken.map((i) => i.institution ?? "Bank").join(", ")}: use Reconnect, or Remove and connect again.
+        </Alert>
       )}
 
       <Section title="Accounts">
-        <LoadState empty={meta?.accounts.length === 0} emptyText="No accounts yet." />
-        {meta && meta.accounts.length > 0 && (
-          <Table.ScrollContainer minWidth={720}>
-            <Table fz="sm">
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Name</Table.Th><Table.Th>Type</Table.Th><Table.Th>Source</Table.Th>
-                  <Table.Th ta="right">Transactions</Table.Th><Table.Th ta="right">Balance</Table.Th><Table.Th>History cutover</Table.Th><Table.Th />
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {meta.accounts.map((a) => (
-                  <Table.Tr key={a.id}>
-                    <Table.Td>{a.name}{a.institution && <Text span c="dimmed" inherit> · {a.institution}</Text>}</Table.Td>
-                    <Table.Td>{a.type}</Table.Td>
-                    <Table.Td>{a.source}</Table.Td>
-                    <Table.Td ta="right" style={NUM}>{a.txn_count}</Table.Td>
-                    <Table.Td ta="right" style={NUM}>{a.balance == null ? "—" : money2(a.balance)}</Table.Td>
-                    <Table.Td>
-                      <TextInput
-                        type="date"
-                        size="xs"
-                        aria-label={`History cutover for ${a.name}`}
-                        defaultValue={a.history_cutover ?? ""}
-                        onChange={async (e) => {
-                          await api(`/accounts/${a.id}`, { history_cutover: e.currentTarget.value || null }, "PATCH");
-                          await reloadMeta();
-                        }}
-                      />
-                    </Table.Td>
-                    <Table.Td ta="right">
-                      <Group gap="xs" justify="flex-end" wrap="nowrap">
-                      {a.source === "plaid" && (
-                        <Button size="xs" variant="default" onClick={() => { setMerge(a); setMergeInto(null); }}>Merge into…</Button>
-                      )}
-                      <Button size="xs" variant="subtle" color="red" onClick={async () => {
-                        if (!confirm(`Delete ${a.name} and all ${a.txn_count} of its transactions? You cannot undo this.`)) return;
-                        await api(`/accounts/${a.id}`, undefined, "DELETE");
-                        refresh();
-                      }}>Delete</Button>
-                      </Group>
-                    </Table.Td>
-                  </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
-          </Table.ScrollContainer>
-        )}
+        <LoadState empty={meta?.accounts.length === 0 && (items.data?.length ?? 0) === 0} emptyText="No accounts yet. Connect a bank, add a mock bank, or add a manual account." />
+        {groups.map((g) => (
+          <Stack key={g.key} gap={0} mb="md">
+            <Group justify="space-between" wrap="nowrap" py="xs" style={{ borderBottom: "1px solid var(--mantine-color-default-border)" }}>
+              <div>
+                <Text fw={600}>{g.title} <Text span c="dimmed" inherit>({g.accounts.length})</Text></Text>
+                {g.item ? (
+                  <Text size="xs" c={g.item.status === "ok" ? "dimmed" : "red"}>
+                    {g.item.status === "ok" ? "Connected" : g.item.status === "reconnect" ? "Sign-in needed" : g.item.error}
+                    {" · "}Last sync: {g.item.last_synced_at ? new Date(g.item.last_synced_at).toLocaleString() : "Never"}
+                  </Text>
+                ) : (
+                  <Text size="xs" c="dimmed">No bank link. Add rows by hand or by CSV.</Text>
+                )}
+              </div>
+              {g.item && (
+                <Group gap="xs" wrap="nowrap">
+                  {g.item.status === "reconnect" && <Button size="xs" disabled={busy} onClick={() => reconnect(g.item!.id)}>Reconnect</Button>}
+                  <Button size="xs" variant="default" disabled={busy} onClick={() => syncItem(g.item!.id)}>Sync now</Button>
+                  <Button size="xs" variant="subtle" color="red" disabled={busy} onClick={() => removeItem(g.item!)}>Remove</Button>
+                </Group>
+              )}
+            </Group>
+            {g.accounts.length > 0 && (
+              <Table.ScrollContainer minWidth={560}>
+                <Table fz="sm">
+                  <Table.Tbody>
+                    {g.accounts.map((a) => (
+                      <Table.Tr key={a.id}>
+                        <Table.Td>{a.name}</Table.Td>
+                        <Table.Td c="dimmed">{a.type}</Table.Td>
+                        <Table.Td ta="right" style={NUM}>{a.txn_count} txns</Table.Td>
+                        <Table.Td ta="right" style={NUM}>{a.balance == null ? "—" : money2(a.balance)}</Table.Td>
+                        <Table.Td ta="right">
+                          <Menu position="bottom-end">
+                            <Menu.Target>
+                              <Button size="xs" variant="subtle" aria-label={`Actions for ${a.name}`}>⋯</Button>
+                            </Menu.Target>
+                            <Menu.Dropdown>
+                              {a.source === "plaid" && <Menu.Item onClick={() => { setMerge(a); setMergeInto(null); }}>Merge into…</Menu.Item>}
+                              <Menu.Item onClick={() => setCutover({ id: a.id, name: a.name, value: a.history_cutover ?? "" })}>
+                                History cutover{a.history_cutover ? `: ${a.history_cutover}` : "…"}
+                              </Menu.Item>
+                              <Menu.Item color="red" onClick={async () => {
+                                if (!confirm(`Delete ${a.name} and all ${a.txn_count} of its transactions? You cannot undo this.`)) return;
+                                await api(`/accounts/${a.id}`, undefined, "DELETE");
+                                refresh();
+                              }}>Delete</Menu.Item>
+                            </Menu.Dropdown>
+                          </Menu>
+                        </Table.Td>
+                      </Table.Tr>
+                    ))}
+                  </Table.Tbody>
+                </Table>
+              </Table.ScrollContainer>
+            )}
+          </Stack>
+        ))}
         <AddAccount onDone={refresh} />
       </Section>
+
+      <Modal opened={cutover !== null} onClose={() => setCutover(null)} title={`History cutover for ${cutover?.name ?? ""}`}>
+        <Stack gap="sm">
+          <Text size="sm">Bank rows before this date are ignored. Use it when older rows come from a CSV import.</Text>
+          <TextInput type="date" label="Cutover date" value={cutover?.value ?? ""} onChange={(e) => cutover && setCutover({ ...cutover, value: e.currentTarget.value })} />
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setCutover(null)}>Cancel</Button>
+            <Button onClick={async () => {
+              const c = cutover!;
+              setCutover(null);
+              await api(`/accounts/${c.id}`, { history_cutover: c.value || null }, "PATCH");
+              await reloadMeta();
+            }}>Save</Button>
+          </Group>
+        </Stack>
+      </Modal>
 
       <Modal opened={merge !== null} onClose={() => setMerge(null)} title={`Merge ${merge?.name ?? ""} into another account`}>
         <Stack gap="sm">

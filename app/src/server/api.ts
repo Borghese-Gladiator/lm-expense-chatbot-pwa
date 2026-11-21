@@ -699,6 +699,15 @@ const ROUTES: [string, string, Handler][] = [
       return { ok: true };
     },
   ],
+  [
+    "DELETE",
+    "plaid/items/:id",
+    async (ctx, { params }) => {
+      const out = await plaid.removeItem(ctx.db, ctx.plaid, id(params[0]));
+      if (!out) throw new HttpError(404, "connection not found");
+      return out;
+    },
+  ],
   ["GET", "cron/sync", async (ctx) => syncAll(ctx)],
 ];
 
@@ -773,7 +782,7 @@ export function sharedCtx(): Promise<Ctx> {
     const real = loadSettings();
     const settings = mockSettings(real);
     const db = await openDb(settings);
-    await seedIfEmpty(db);
+    if (!hasLivePlaid(real)) await seedIfEmpty(db);
     return { settings, db, plaid: new plaid.PlaidClient(settings, hasLivePlaid(real) ? routedFetch() : mockFetch) };
   })().catch((e) => {
     shared = undefined;

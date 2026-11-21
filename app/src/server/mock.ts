@@ -50,6 +50,7 @@ export const mockFetch: typeof fetch = async (input, init) => {
   const reply = ({
     "/link/token/create": { link_token: "mock-link-token" },
     "/item/public_token/exchange": { access_token: MOCK_ACCESS_TOKEN, item_id: "mock-item" },
+    "/item/remove": { request_id: "mock" },
     "/accounts/get": { accounts: PLAID_ACCOUNTS },
     "/transactions/sync": body.cursor
       ? { added: [], modified: [], removed: [], accounts: PLAID_ACCOUNTS, next_cursor: body.cursor, has_more: false }
