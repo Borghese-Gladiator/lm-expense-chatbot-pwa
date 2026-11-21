@@ -109,6 +109,7 @@ export interface Meta {
   plaid_live: boolean;
   plaid_env: string;
   ask_configured: boolean;
+  ask_live: boolean;
   categories: Category[];
   accounts: Account[];
   tags: string[];

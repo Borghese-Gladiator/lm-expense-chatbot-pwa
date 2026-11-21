@@ -10,8 +10,9 @@ import {
   runQuery,
   whereClause,
 } from "./analytics";
-import { hasLivePlaid, mockAsk, mockFetch, mockSettings, routedFetch, seedIfEmpty } from "./mock";
+import { hasLiveAsk, hasLivePlaid, mockAsk, mockFetch, mockSettings, routedFetch, seedIfEmpty } from "./mock";
 import { loadSettings, type Settings } from "./config";
+import { ask } from "./ask";
 import { CsvImportSchema, importCsv } from "./csv";
 import { one, openDb, scalar, type Db, type Row } from "./db";
 import { tracked } from "./history";
@@ -217,6 +218,7 @@ const ROUTES: [string, string, Handler][] = [
         plaid_live: settings.plaidClientId !== "mock",
         plaid_env: settings.plaidEnv,
         ask_configured: Boolean(settings.anthropicApiKey),
+        ask_live: hasLiveAsk(settings),
         categories,
         accounts,
         tags: tags.map((r) => r.t),
@@ -234,7 +236,7 @@ const ROUTES: [string, string, Handler][] = [
       const { question } = AskRequest.parse(body);
       if (!settings.anthropicApiKey) throw new HttpError(503, "set ANTHROPIC_API_KEY to use Ask");
       try {
-        return await mockAsk(db, question);
+        return hasLiveAsk(settings) ? await ask(db, settings, question) : await mockAsk(db, question);
       } catch (e) {
         if (e instanceof Anthropic.APIError || e instanceof Error)
           throw new HttpError(502, `Ask failed: ${e.constructor.name}`);

@@ -9,13 +9,14 @@ export const MOCK_PUBLIC_TOKEN = "mock-public-token";
 export const MOCK_ACCESS_TOKEN = "mock-access-token";
 
 export const hasLivePlaid = (s: Settings) => Boolean(s.plaidClientId && s.plaidSecret);
+export const hasLiveAsk = (s: Settings) => Boolean(s.anthropicApiKey && s.anthropicApiKey !== "mock");
 
 export const mockSettings = (s: Settings): Settings => ({
   ...s,
   plaidClientId: s.plaidClientId || "mock",
   plaidSecret: s.plaidSecret || "mock",
   appSecretKey: s.appSecretKey || (hasLivePlaid(s) ? "" : "mock-secret-key-for-demo-only"),
-  anthropicApiKey: "mock",
+  anthropicApiKey: s.anthropicApiKey || "mock",
 });
 
 const iso = (daysAgo: number) => new Date(Date.now() - daysAgo * 86_400_000).toISOString().slice(0, 10);

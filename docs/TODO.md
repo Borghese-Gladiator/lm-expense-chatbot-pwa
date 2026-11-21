@@ -10,7 +10,7 @@ Spend Lens tracks expenses. It has no budgets, no goals, no bill payment, no net
 |---|---|
 | ✅ | Done |
 | 🟡 | Partial. Some code exists. |
-| 🔍 | Built. Test it in the browser or with sandbox keys. |
+| 🔍 | Built and unit tested. Not yet checked in the browser or with sandbox keys. |
 | ⬜ | Not started. No code exists. |
 | 🤔 | A decision is needed first. |
 
@@ -30,12 +30,13 @@ The icons come from a read of the code and the PRDs. No icon is a browser result
 
 - 🔍 [ ] Test Plaid with sandbox keys. Connect a sandbox bank, sync, and check that pending, posted, and removed rows are correct (BANK-01).
 - 🔍 [ ] Test Reconnect (update mode) in the sandbox with a forced `ITEM_LOGIN_REQUIRED`.
-- ⬜ [ ] **Rename a connection.** Add a rename action to each row in Bank connections on the Accounts page. Add a `PATCH` route that saves the new name. Keep the name after a sync and after Reconnect.
-- ⬜ [ ] Add a banner on every page when a connection needs sign-in.
+- 🔍 [x] **Rename a connection.** Done. The name stays after a sync and after Reconnect.
+- 🔍 [x] **Accounts page.** Grouped by bank, with Sync all, Disconnect (keep or delete rows), account links to Transactions, type labels, and times in plain words.
+- 🔍 [x] Add a banner on every page when a connection needs sign-in.
 - 🟡 [ ] Show a plain reason and a plain next step for each Plaid error. The page shows the last error text now.
 - ⬜ [ ] Mark a connection as broken after three failed syncs in a row.
 - ⬜ [ ] Add Plaid webhooks for `ITEM_LOGIN_REQUIRED` and `PENDING_EXPIRATION`. Verify the signature.
-- 🔍 [ ] Test that Plaid sync keeps trip links when a transaction changes (TRIP-08). A removed Plaid row deletes its link.
+- ✅ [x] Plaid sync keeps trip links when a pending row posts or changes (TRIP-08). A removed Plaid row deletes its link. Covered by unit tests with the fake bank.
 - 🔍 [ ] Test duplicate resolution with real Plaid history and migrated CSV rows.
 
 ### 3. UI revamp (PRD 10)
@@ -54,24 +55,24 @@ The icons come from a read of the code and the PRDs. No icon is a browser result
 
 Do these in order. Each item names its PRD.
 
-- ⬜ [ ] **Split transactions** (PRD 06). Add the API and the editor. Validate on the server that the parts sum to the parent. Decide the sync edge cases.
-- 🟡 [ ] **Change history** (PRD 08). Add `transaction_changes`. Write an entry from every update path. Add History and undo to the row detail. Move rule undo onto it. Undo of a batch works now for a manual rule apply only.
-- 🟡 [ ] **Rules and merchants** (PRD 05). Rules can be created and deleted now:
-  - ⬜ [ ] Edit a rule.
-  - ⬜ [ ] Add a "set type" action, to mark transfers.
+- 🔍 [x] **Split transactions** (PRD 06). API, server check of the sum, editor in the row detail, and the sync edge cases.
+- 🟡 [ ] **Change history** (PRD 08). The table, the History list in the row detail, and entries for manual edits, bulk edits, and rule runs exist. Open: undo one change, undo a bulk edit, undo a rule run on a sync.
+- 🟡 [ ] **Rules and merchants** (PRD 05):
+  - 🔍 [x] Edit a rule.
+  - 🔍 [x] Add a "set type" action, to mark transfers.
   - ⬜ [ ] Make a rule from a transaction.
   - ⬜ [ ] Add a merchant list with rename and merge.
   - ⬜ [ ] Add rule order controls.
   - ⬜ [ ] Record and undo the rule run on a sync.
   - ⬜ [ ] Add more text conditions (starts with, equals, regex), and category, date, and type conditions.
   - ⬜ [ ] Add AND/OR groups.
-  - 🟡 [ ] Show the matching rows in the rule preview. The UI shows a count only.
-- 🟡 [ ] **Explore** (PRD 01, PRD 02):
-  - ⬜ [ ] Add `trip` as a filter and a dimension (TRIP-12, EXP-05).
-  - 🟡 [ ] Add complete-month and rolling presets, with a label (EXP-01, EXP-02).
-  - ⬜ [ ] Add category exclusion (EXP-09).
-  - ⬜ [ ] Add the year-over-year overlay chart (YOY-04).
-  - ⬜ [ ] Make "Same period last year" the default for year to date (YOY-03).
+  - 🔍 [x] Show the matching rows in the rule preview.
+- 🔍 [x] **Explore** (PRD 01, PRD 02). Check each item in the browser:
+  - 🔍 [x] `trip` as a filter and a dimension (TRIP-12, EXP-05).
+  - 🔍 [x] Complete-month and rolling presets, with a label (EXP-01, EXP-02).
+  - 🔍 [x] Category exclusion (EXP-09).
+  - 🔍 [x] Year-over-year overlay chart (YOY-04).
+  - 🔍 [x] "Same period last year" is the default for year to date (YOY-03).
 
 ## Backlog
 

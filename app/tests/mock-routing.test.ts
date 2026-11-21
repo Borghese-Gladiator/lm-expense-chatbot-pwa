@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { hasLivePlaid, mockSettings, routedFetch } from "@/server/mock";
+import { hasLiveAsk, hasLivePlaid, mockSettings, routedFetch } from "@/server/mock";
 import { loadSettings } from "@/server/config";
 
 const call = (fetchFn: typeof fetch, body: object) =>
@@ -31,5 +31,20 @@ describe("mockSettings", () => {
     [{ PLAID_CLIENT_ID: "cid", PLAID_SECRET: "sec" }, true],
   ])("hasLivePlaid %j is %s", (env, live) => {
     expect(hasLivePlaid(loadSettings(env as unknown as NodeJS.ProcessEnv))).toBe(live);
+  });
+});
+
+describe("live Ask", () => {
+  it("keeps a real key, and falls back to the mock key when none is set", () => {
+    expect(mockSettings(loadSettings({ ANTHROPIC_API_KEY: "sk-real" } as unknown as NodeJS.ProcessEnv)).anthropicApiKey).toBe("sk-real");
+    expect(mockSettings(loadSettings({} as unknown as NodeJS.ProcessEnv)).anthropicApiKey).toBe("mock");
+  });
+
+  it.each([
+    [{}, false],
+    [{ ANTHROPIC_API_KEY: "" }, false],
+    [{ ANTHROPIC_API_KEY: "sk-real" }, true],
+  ])("hasLiveAsk of %j is %s once the mock settings are applied", (env, live) => {
+    expect(hasLiveAsk(mockSettings(loadSettings(env as unknown as NodeJS.ProcessEnv)))).toBe(live);
   });
 });
