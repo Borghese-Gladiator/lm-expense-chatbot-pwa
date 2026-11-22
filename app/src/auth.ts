@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 import { loadSettings } from "./server/config";
+import { tooMany } from "./server/limit";
 
 const COOKIE = "sl_session";
 const MAX_AGE = 30 * 24 * 60 * 60;
@@ -32,7 +33,14 @@ const cookie = (value: string, maxAge: number) =>
     Date.now() + maxAge * 1000,
   ).toUTCString()}`;
 
+const LOGINS_PER_MINUTE = 60;
+
+const clientIp = (req: Request) =>
+  req.headers.get("x-real-ip") ?? req.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "unknown";
+
 async function login(req: Request, password: string): Promise<Response> {
+  if (tooMany(`login:${clientIp(req)}`, LOGINS_PER_MINUTE, 60_000))
+    return Response.json({ detail: "too many attempts, wait a minute" }, { status: 429, headers: { "Retry-After": "60" } });
   const body = await req.json().catch(() => ({}));
   const given = typeof body?.password === "string" ? body.password : "";
   if (!same(given, password)) return Response.json({ detail: "wrong password" }, { status: 401 });

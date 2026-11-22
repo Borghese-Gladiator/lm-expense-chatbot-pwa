@@ -13,6 +13,7 @@ import {
 import { hasLiveAsk, hasLivePlaid, mockAsk, mockFetch, mockSettings, routedFetch, seedIfEmpty } from "./mock";
 import { loadSettings, type Settings } from "./config";
 import { ask } from "./ask";
+import { tooMany } from "./limit";
 import { CsvImportSchema, importCsv } from "./csv";
 import { one, openDb, scalar, type Db, type Row } from "./db";
 import { tracked } from "./history";
@@ -133,6 +134,7 @@ const TripIn = z.object({
 });
 const TripPatch = TripIn.partial();
 const TripLinkIn = z.object({ transaction_id: z.number().int(), amount: z.number().positive().nullish() });
+const ASK_PER_HOUR = 30;
 const AskRequest =z.object({ question: z.string().min(3).max(500) });
 const PublicTokenIn = z.object({ public_token: z.string(), institution: z.string().nullish() });
 
@@ -235,6 +237,8 @@ const ROUTES: [string, string, Handler][] = [
     async ({ db, settings }, { body }) => {
       const { question } = AskRequest.parse(body);
       if (!settings.anthropicApiKey) throw new HttpError(503, "set ANTHROPIC_API_KEY to use Ask");
+      if (hasLiveAsk(settings) && tooMany("ask", ASK_PER_HOUR, 3_600_000))
+        throw new HttpError(429, `Ask is limited to ${ASK_PER_HOUR} questions an hour. Try again later.`);
       try {
         return hasLiveAsk(settings) ? await ask(db, settings, question) : await mockAsk(db, question);
       } catch (e) {

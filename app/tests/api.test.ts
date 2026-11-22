@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { authorize, sessionToken } from "@/auth";
+import { resetLimits, tooMany } from "@/server/limit";
 import { handle, type Ctx } from "@/server/api";
 import { loadSettings } from "@/server/config";
 import { decrypt, encrypt } from "@/server/crypto";
@@ -146,10 +147,28 @@ describe("authorize", () => {
     expect(bad.headers.get("set-cookie")).toBeNull();
   });
 
+  it("refuses the 61st login from one IP in a minute and still serves another IP", async () => {
+    resetLimits();
+    const from = (ip: string) =>
+      authorize(new Request("http://test/api/login", { method: "POST", headers: { "x-real-ip": ip }, body: JSON.stringify({ password: "nope" }) }), env);
+    for (let i = 0; i < 60; i++) expect((await from("1.1.1.1"))!.status).toBe(401);
+    const blocked = (await from("1.1.1.1"))!;
+    expect(blocked.status).toBe(429);
+    expect(blocked.headers.get("retry-after")).toBe("60");
+    expect((await from("2.2.2.2"))!.status).toBe(401);
+  });
+
   it("clears the cookie on logout", async () => {
     const out = (await authorize(new Request("http://test/api/logout", { method: "POST", headers: { cookie: good } }), env))!;
     expect(out.headers.get("set-cookie")).toMatch(/^sl_session=;.*Max-Age=0/);
   });
+});
+
+it("tooMany allows max hits in a window, then blocks, then resets", () => {
+  resetLimits();
+  const results = [1, 2, 3, 4].map(() => tooMany("k", 3, 1000, 0));
+  expect(results).toEqual([false, false, false, true]);
+  expect(tooMany("k", 3, 1000, 1001)).toBe(false);
 });
 
 it("finds and resolves possible duplicates", async () => {
