@@ -42,7 +42,7 @@ The icons come from a read of the code and the PRDs. No icon is a browser result
 ### 3. UI revamp (PRD 10)
 
 - ⬜ [ ] **UI/UX design pass.** Review each page for layout, spacing, empty states, and loading states. Make one list of fixes, and then do them.
-- ⬜ [ ] **Mobile support.** Make each page work at 375 px width. Make tables scroll or stack on small screens. Make drawers full screen on phones. Test on iOS Safari and Android Chrome.
+- ⬜ [ ] **Mobile support.** Make each page responsive! Make tables scroll or stack on small screens. Make drawers full screen on phones. Test on iOS Safari and Android Chrome.
 - 🟡 [ ] **PWA.** The manifest and icons exist. Check install and the login cookie in the installed app. Show an offline message with no cached data. Do not cache `/api/` responses, because they contain bank data.
 
 ### 4. Bug bash
@@ -50,6 +50,24 @@ The icons come from a read of the code and the PRDs. No icon is a browser result
 - 🔍 [ ] Test Ask with a real API key. Run the 10 questions in PRD 09.
 - ⬜ [ ] Measure report time on 50,000 transactions. The target is less than two seconds.
 - ⬜ [ ] Use the app for one week with real data. Write each fault in one list, and fix the list.
+
+### 5. Security audits
+
+Write each fault in the bug bash list with a severity. Final bug bash section F has the browser checks.
+
+- ⬜ [ ] **Dependencies.** Run `npm audit`. Fix each high and critical fault. Add the check to CI.
+- ⬜ [ ] **Secrets.** Scan the source and the git history for keys, tokens, and passwords. Rotate each secret that appears.
+- ⬜ [ ] **Auth.** Read the login code and the cookie code. Check the password compare, the cookie signing, the cookie expiry, and the sign-out.
+- ⬜ [ ] **Route access.** List each `/api/` route. Check that each route checks the login, except the login route and the webhook routes.
+- ⬜ [ ] **Plaid tokens.** Check where the access tokens are stored. Check that no token goes to the browser, to a log, or to an error message.
+- ⬜ [ ] **SQL.** Read each query. Check that each value uses a parameter and that no query joins user text into the SQL.
+- ⬜ [ ] **Input checks.** Check that each route validates the body, the query, and the file size. Include the CSV import.
+- ⬜ [ ] **Ask.** Check that the model has read access only and that the SQL tool cannot write. Test prompt injection through a merchant name.
+- ⬜ [ ] **Headers.** Check `Content-Security-Policy`, `X-Frame-Options`, `Referrer-Policy`, and `Strict-Transport-Security` on each page.
+- ⬜ [ ] **Webhooks.** Check that the signature check runs before any other work. Check the replay window.
+- ⬜ [ ] **Rate limits.** Check the login limit and the Ask limit. Check that the limit holds across more than one server instance.
+- ⬜ [ ] **Data at rest.** Check the Neon access rules, the backup access, and the PGlite file permissions.
+- ⬜ [ ] **Repeat.** Do these audits again before each release and after each change to auth, Plaid, or Ask.
 
 ## Features
 
@@ -79,7 +97,6 @@ Do these in order. Each item names its PRD.
 Do these items only when there is a need for them.
 
 - ⬜ [ ] **Caching and TTLs.** Cache report results for a short time. Clear the cache after a sync or an edit. Do this only if reports become slow.
-- ⬜ [ ] **Rate limiting.** Limit failed login attempts and Ask requests (Ask calls a paid API).
 - ⬜ [ ] **Push notices.** Send a PWA notice for a broken connection. Do this after the banner.
 - ⬜ [ ] **Observability.** Vercel logs and analytics are enough for now. If they are not enough, add structured JSON logs with a request ID, metrics (request time, error rate, sync failures, Ask token use), and OpenTelemetry traces through `instrumentation.ts`. Never log tokens, passwords, or bank data.
 - ⬜ [ ] **Helm chart.** Only if the app moves off Vercel to Kubernetes.
