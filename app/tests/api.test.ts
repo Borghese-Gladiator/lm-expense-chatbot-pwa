@@ -49,6 +49,25 @@ it("runs the manual flow", async () => {
   expect(csv.split("\r\n")[1].split(",").slice(2, 4)).toEqual(["Cash", "Blue Bottle"]);
 });
 
+it("filters pending rows and counts each quick filter within the other filters", async () => {
+  const acct = (await post("accounts", { name: "Cash" })).id;
+  const cat = (await post("categories", { name: "Coffee" })).id;
+  const add = async (payee: string, category_id?: number) =>
+    (await post("transactions", { account_id: acct, date: "2026-10-01", amount: -5, payee, category_id })).id;
+  const a = await add("A", cat);
+  await add("B");
+  const c = await add("C");
+  await ctx.db.query("UPDATE transactions SET reviewed = (id = ?)", [a]);
+  await ctx.db.query("UPDATE transactions SET is_pending = TRUE WHERE id = ?", [c]);
+
+  const all = await post("transactions/search");
+  expect(all.counts).toEqual({ uncategorized: 2, unreviewed: 2, pending: 1 });
+  const pending = await post("transactions/search", { pending: true });
+  expect([pending.total, pending.items[0].id, pending.counts.pending]).toEqual([1, c, 1]);
+  const searched = await post("transactions/search", { filters: { search: "B" }, uncategorized: true });
+  expect([searched.total, searched.counts]).toEqual([1, { uncategorized: 1, unreviewed: 1, pending: 0 }]);
+});
+
 it("round-trips saved queries", async () => {
   const id = (await post("saved-queries", { name: "Monthly food", query: { dimensions: ["month"], metric: "avg" } })).id;
   const saved = await (await call("GET", "saved-queries")).json();

@@ -1,4 +1,4 @@
-import { Alert, Button, Card, Checkbox, Group, NumberInput, Select, Stack, Table, Text, TextInput, Title } from "@mantine/core";
+import { Alert, Anchor, Button, Card, Chip, Group, NumberInput, Select, Stack, Table, Text, TextInput, Title } from "@mantine/core";
 import { DatePickerInput, DateInput } from "@mantine/dates";
 import { useState } from "react";
 
@@ -8,14 +8,21 @@ import { money2 } from "../format";
 import { LoadState, TransactionTable, useApp, useAsync } from "../shared";
 
 const PAGE = 100;
+const NO_FLAGS = { uncategorized: false, unreviewed: false, pending: false };
+const BASE_FILTERS: Filters = { include_pending: true, include_excluded_categories: true };
+const CHIPS = [
+  ["uncategorized", "Uncategorized"],
+  ["unreviewed", "Unreviewed"],
+  ["pending", "Pending"],
+] as const;
 
 export function Transactions() {
   const { meta, openTxn, version, bump } = useApp();
   const [filters, setFilters] = useState<Filters>(() => {
     const account = /[?&]account=(\d+)/.exec(location.hash)?.[1];
-    return { include_pending: true, include_excluded_categories: true, ...(account ? { account_ids: [Number(account)] } : {}) };
+    return { ...BASE_FILTERS, ...(account ? { account_ids: [Number(account)] } : {}) };
   });
-  const [flags, setFlags] = useState({ uncategorized: false, unreviewed: false });
+  const [flags, setFlags] = useState(NO_FLAGS);
   const [sort, setSort] = useState<{ sort: string; desc: boolean }>({ sort: "date", desc: true });
   const [cursors, setCursors] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -26,9 +33,22 @@ export function Transactions() {
   const page = cursors.length;
   const body = { filters, ...flags, ...sort, cursor: cursors[page - 1] ?? null, limit: PAGE };
   const { data, error, loading } = useAsync(
-    () => api<{ items: Txn[]; next_cursor: string | null; total: number; sum: number }>("/transactions/search", body),
+    () =>
+      api<{ items: Txn[]; next_cursor: string | null; total: number; sum: number; counts: Record<keyof typeof NO_FLAGS, number> }>(
+        "/transactions/search",
+        body,
+      ),
     [JSON.stringify(body), version],
   );
+  const everything = meta?.accounts.reduce((n, a) => n + a.txn_count, 0);
+  const narrowed =
+    Object.values(flags).some(Boolean) ||
+    Boolean(filters.search || filters.start || filters.end || filters.account_ids?.length || filters.category_ids?.length || filters.types?.length);
+  const clearAll = () => {
+    setCursors([]);
+    setFilters(BASE_FILTERS);
+    setFlags(NO_FLAGS);
+  };
 
   const setF = (p: Partial<Filters>) => {
     setCursors([]);
@@ -117,8 +137,13 @@ export function Transactions() {
               onChange={(v) => { if (!v) return; const [s, d] = v.split(":"); setCursors([]); setSort({ sort: s, desc: d === "true" }); }}
               w={190}
             />
-            <Checkbox label="Uncategorized" checked={flags.uncategorized} onChange={(e) => { setCursors([]); setFlags({ ...flags, uncategorized: e.currentTarget.checked }); }} />
-            <Checkbox label="Unreviewed" checked={flags.unreviewed} onChange={(e) => { setCursors([]); setFlags({ ...flags, unreviewed: e.currentTarget.checked }); }} />
+          </Group>
+          <Group gap="xs" role="group" aria-label="Quick filters">
+            {CHIPS.map(([key, label]) => (
+              <Chip key={key} size="xs" checked={flags[key]} onChange={(on) => { setCursors([]); setFlags({ ...flags, [key]: on }); }}>
+                {data ? `${label} (${data.counts[key].toLocaleString()})` : label}
+              </Chip>
+            ))}
           </Group>
           {selected.size > 0 && (
             <Group gap="sm" wrap="wrap">
@@ -131,9 +156,13 @@ export function Transactions() {
             </Group>
           )}
           {data && (
-            <Text c="dimmed" size="sm">
-              {data.total.toLocaleString()} transactions · net {money2(data.sum)}
-            </Text>
+            <Group gap="xs">
+              <Text c="dimmed" size="sm">
+                Showing {data.total.toLocaleString()}
+                {everything != null && everything >= data.total ? ` of ${everything.toLocaleString()}` : ""} transactions · net {money2(data.sum)}
+              </Text>
+              {narrowed && <Anchor component="button" type="button" size="sm" onClick={clearAll}>Clear all</Anchor>}
+            </Group>
           )}
           <LoadState loading={loading && !data} error={error} empty={data?.total === 0} />
           {data && data.items.length > 0 && (

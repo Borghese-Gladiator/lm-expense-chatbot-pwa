@@ -47,7 +47,7 @@ test.describe("Accounts page", () => {
     await signIn(page);
     await page.goto("/#accounts");
     await expect(page.getByRole("button", { name: "Sync all" })).toBeVisible();
-    await expect(page.getByText(/^Mock Bank \(\d+\)$/)).toBeVisible();
+    await expect(page.getByText(/^Mock Bank \([\d,]+\)$/)).toBeVisible();
     await expect(page.getByText("Accounts with no bank link")).toBeVisible();
 
     await page.getByRole("link", { name: /View transactions for Mock Bank Checking/ }).click();
@@ -231,6 +231,36 @@ test.describe("Explore with trips", () => {
     await page.getByRole("option", { name: tripName }).click();
     await expect(table.getByRole("row", { name: new RegExp(tripName) })).toContainText("$250");
     await expect(table.getByRole("row", { name: /\(no trip\)/ })).toHaveCount(0);
+    expect(problems).toEqual([]);
+  });
+});
+
+test.describe("Shell and quick filters", () => {
+  test("shows the breadcrumb, the count badge, the chip counts, and Clear all", async ({ page, viewport }) => {
+    const problems = watch(page);
+    await signIn(page);
+    await addImportedTransaction(page, `Chip${stamp()}`, -12);
+    await page.goto("/#transactions");
+    if ((viewport?.width ?? 1280) < 768) await page.getByRole("button", { name: "Toggle navigation" }).click();
+
+    await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("Workspace/Transactions");
+    await expect(page.getByText("Personal spending")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Transactions", exact: true })).toContainText(/\d/);
+    if ((viewport?.width ?? 1280) < 768) await page.getByRole("button", { name: "Toggle navigation" }).click();
+
+    await expect(page.getByText(/^Showing [\d,]+ of [\d,]+ transactions/)).toBeVisible();
+    const chip = page.getByRole("checkbox", { name: /^Uncategorized \([\d,]+\)$/ });
+    await expect(page.getByText(/^Uncategorized \([\d,]+\)$/)).toBeVisible();
+    await expect(page.getByText(/^Unreviewed \([\d,]+\)$/)).toBeVisible();
+    await expect(page.getByText(/^Pending \([\d,]+\)$/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Clear all" })).toHaveCount(0);
+
+    await page.getByText(/^Uncategorized \([\d,]+\)$/).click();
+    await expect(chip).toBeChecked();
+    await expect(page.getByRole("button", { name: "Clear all" })).toBeVisible();
+    await page.getByRole("button", { name: "Clear all" }).click();
+    await expect(page.getByRole("button", { name: "Clear all" })).toHaveCount(0);
+    await expect(chip).not.toBeChecked();
     expect(problems).toEqual([]);
   });
 });

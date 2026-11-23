@@ -42,6 +42,7 @@ const TxnSearch = z.object({
   filters: FiltersSchema.prefault({ include_pending: true, include_excluded_categories: true }),
   uncategorized: z.boolean().default(false),
   unreviewed: z.boolean().default(false),
+  pending: z.boolean().default(false),
   sort: z.enum(["date", "amount", "merchant", "category", "account"]).default("date"),
   desc: z.boolean().default(true),
   cursor: z.string().nullish(),
@@ -148,6 +149,7 @@ function txnWhere(body: z.infer<typeof TxnSearch>): [string, unknown[]] {
   let [where, params] = whereClause(body.filters, null);
   if (body.uncategorized) where += " AND category_id IS NULL";
   if (body.unreviewed) where += " AND NOT reviewed";
+  if (body.pending) where += " AND is_pending";
   return [where, params];
 }
 
@@ -296,16 +298,31 @@ const ROUTES: [string, string, Handler][] = [
         page = `(${where}) AND (${b.sort}, id) ${b.desc ? "<" : ">"} (?, ?)`;
         pageParams.push(...decodeCursor(b.cursor));
       }
-      const [rows, total] = await Promise.all([
+      const [baseWhere, baseParams] = whereClause(b.filters, null);
+      const [rows, total, counts] = await Promise.all([
         db.query<Record<string, unknown>>(
           `SELECT * FROM reportable WHERE ${page} ORDER BY ${b.sort} ${dir}, id ${dir} LIMIT ${b.limit + 1}`,
           pageParams,
         ),
         one<{ n: number; s: number | null }>(db, `SELECT COUNT(*) AS n, SUM(amount) AS s FROM reportable WHERE ${where}`, params),
+        one<{ uncategorized: number; unreviewed: number; pending: number }>(
+          db,
+          `SELECT COUNT(*) FILTER (WHERE category_id IS NULL) AS uncategorized,
+                  COUNT(*) FILTER (WHERE NOT reviewed) AS unreviewed,
+                  COUNT(*) FILTER (WHERE is_pending) AS pending
+           FROM reportable WHERE ${baseWhere}`,
+          baseParams,
+        ),
       ]);
       const items = rows.slice(0, b.limit);
       const next_cursor = rows.length > b.limit ? encodeCursor(items[items.length - 1], b.sort) : null;
-      return { items, next_cursor, total: total!.n, sum: total!.s ?? 0 };
+      return {
+        items,
+        next_cursor,
+        total: total!.n,
+        sum: total!.s ?? 0,
+        counts: { uncategorized: Number(counts!.uncategorized), unreviewed: Number(counts!.unreviewed), pending: Number(counts!.pending) },
+      };
     },
   ],
   [
