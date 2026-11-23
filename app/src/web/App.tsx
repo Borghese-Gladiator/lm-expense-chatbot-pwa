@@ -1,4 +1,4 @@
-import { Alert, AppShell, Badge, Burger, Button, Container, Group, NavLink, Paper, Text, Title } from "@mantine/core";
+import { Alert, AppShell, Badge, Box, Burger, Button, Container, Group, NavLink, Paper, Text, Title } from "@mantine/core";
 import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import { useCallback, useEffect, useState } from "react";
 
@@ -35,6 +35,7 @@ async function signOut() {
 
 export default function App() {
   const { meta, reloadMeta } = useMeta();
+  const txnCount = meta?.accounts.reduce((n, a) => n + a.txn_count, 0);
   const [page, setPage] = useState<PageId>(pageFromHash);
   const [drill, setDrill] = useState<Drill | null>(null);
   const [txnId, setTxnId] = useState<number | null>(null);
@@ -63,6 +64,9 @@ export default function App() {
     if (meta) setCurrency(meta.currency);
   }, [meta]);
   useEffect(() => {
+    if (version) reloadMeta();
+  }, [version, reloadMeta]);
+  useEffect(() => {
     api<{ institution: string | null; status: string }[]>("/plaid/items")
       .then((rows) => setBroken(rows.filter((r) => r.status !== "ok").map((r) => r.institution ?? "Bank")))
       .catch(() => setBroken([]));
@@ -77,14 +81,22 @@ export default function App() {
         <AppShell.Header>
           <Group h="100%" px="md" gap="sm">
             <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" aria-label="Toggle navigation" />
-            <Group gap={8} wrap="nowrap">
-              <Badge radius="sm" aria-hidden="true">SL</Badge>
-              <Text fw={700}>Spend Lens</Text>
+            <Group component="nav" aria-label="Breadcrumb" gap={6} wrap="nowrap">
+              <Text size="sm" c="dimmed">Workspace</Text>
+              <Text size="sm" c="dimmed" aria-hidden="true">/</Text>
+              <Text size="sm" fw={600} aria-current="page">{PAGES[page].label}</Text>
             </Group>
             <Button variant="subtle" size="xs" ml="auto" onClick={signOut}>Sign out</Button>
           </Group>
         </AppShell.Header>
         <AppShell.Navbar p="xs" style={mobile && !opened ? { visibility: "hidden" } : undefined}>
+          <Group gap={8} wrap="nowrap" px="xs" pb="sm">
+            <Badge radius="sm" aria-hidden="true">SL</Badge>
+            <div>
+              <Text fw={700} lh={1.2}>Spend Lens</Text>
+              <Text size="xs" c="dimmed">Personal spending</Text>
+            </div>
+          </Group>
           {(Object.keys(PAGES) as PageId[]).map((id) => (
             <NavLink
               key={id}
@@ -93,8 +105,16 @@ export default function App() {
               active={page === id}
               aria-current={page === id ? "page" : undefined}
               onClick={close}
+              rightSection={
+                id === "transactions" && txnCount ? (
+                  <Badge variant="light" size="sm" aria-hidden="true">{txnCount.toLocaleString()}</Badge>
+                ) : id === "accounts" && broken.length > 0 ? (
+                  <Box aria-hidden="true" w={8} h={8} bg="red" style={{ borderRadius: "50%" }} />
+                ) : undefined
+              }
             />
           ))}
+          <Text size="xs" c="dimmed" px="xs" mt="auto">Signed in with the shared password</Text>
         </AppShell.Navbar>
         <AppShell.Main>
           {broken.length > 0 && page !== "accounts" && (
